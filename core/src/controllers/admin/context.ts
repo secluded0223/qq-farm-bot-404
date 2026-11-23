@@ -8,8 +8,16 @@ export {};
  * Creates and holds all shared state for the admin server.
  */
 
+export interface AdminTokenStore {
+    has: (token: unknown) => boolean;
+    add: (token: unknown) => void;
+    delete: (token: unknown) => void;
+    clear: () => void;
+    count?: () => number;
+}
+
 export interface AdminContext {
-    tokens: Set<string>;
+    tokens: AdminTokenStore;
     app: Application | null;
     server: Server | null;
     io: SocketIOServer | null;
@@ -17,9 +25,10 @@ export interface AdminContext {
 }
 
 function createAdminContext(dataProvider: any): AdminContext {
-    const tokens = new Set<string>();
+    // 令牌落盘：重启服务后已登录的浏览器无需重新登录。
+    const { tokenStore } = require('../../models/store/admin-tokens');
     return {
-        tokens,
+        tokens: tokenStore,
         app: null,
         server: null,
         io: null,
