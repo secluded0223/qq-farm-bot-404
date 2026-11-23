@@ -203,6 +203,6 @@ onBeforeUnmount(() => clearInterval(countdown))
 
 <style scoped>
 .login-root {
-  background: var(--app-bg);
+  background: transparent;
 }
 </style>

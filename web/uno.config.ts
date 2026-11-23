@@ -9,6 +9,35 @@ export default defineConfig({
       ],
     },
   },
+  // 农场风格：卡片与控件统一 8px 圆角，灰色阶整体偏暖绿，避免冷灰跳出背景
+  theme: {
+    borderRadius: {
+      none: '0',
+      sm: '4px',
+      DEFAULT: '6px',
+      md: '6px',
+      lg: '8px',
+      xl: '8px',
+      '2xl': '8px',
+      '3xl': '10px',
+      full: '9999px',
+    },
+    colors: {
+      gray: {
+        50: '#f6f9f3',
+        100: '#eef3e9',
+        200: '#dfe7dc',
+        300: '#c9d5c6',
+        400: '#9aa89a',
+        500: '#78877c',
+        600: '#586b62',
+        700: '#3f5048',
+        800: '#2c3a34',
+        900: '#203d31',
+        950: '#141d18',
+      },
+    },
+  },
   shortcuts: {
     'i-carbon-list-blocked': 'i-fas-ban',
     'i-carbon-user-offline': 'i-fas-user-slash',

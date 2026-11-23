@@ -203,14 +203,14 @@ async function handleLogout() {
 
 <template>
   <aside
-    class="fixed inset-y-0 left-0 z-50 h-full w-72 flex flex-col border-r border-gray-200/60 p-3 transition-transform duration-300 lg:static lg:translate-x-0 dark:border-gray-700/60"
+    class="fixed inset-y-0 left-0 z-50 h-full w-[232px] flex flex-col border-r p-3 transition-transform duration-300 lg:static lg:translate-x-0"
     :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
-    :style="{ background: 'color-mix(in srgb, var(--surface-1) 90%, transparent)', color: 'var(--theme-text)' }"
+    :style="{ background: 'var(--farm-sidebar)', borderColor: 'var(--surface-border)', color: 'var(--theme-text)' }"
   >
     <!-- Brand -->
-    <div class="relative h-16 flex flex-none items-center justify-between px-2">
-      <div class="min-w-0 flex items-center gap-3">
-        <div class="h-11 w-11 flex flex-none items-center justify-center overflow-hidden rounded-full shadow-sm ring-1 ring-gray-200 dark:ring-gray-700">
+    <div class="relative h-16 flex flex-none items-center justify-between px-1">
+      <div class="min-w-0 flex items-center gap-2.5">
+        <div class="h-9 w-9 flex flex-none items-center justify-center overflow-hidden rounded-lg ring-1" :style="{ '--un-ring-color': 'var(--surface-border)' }">
           <img
             src="/icon.png"
             :alt="`${brand.title}图标`"
@@ -218,10 +218,10 @@ async function handleLogout() {
           >
         </div>
         <div class="min-w-0">
-          <div class="truncate text-[15px] font-bold tracking-tight" style="color: var(--theme-text);">
+          <div class="truncate text-[17px] font-bold tracking-tight leading-tight" style="color: var(--theme-primary);">
             {{ brand.title }}
           </div>
-          <div class="truncate text-xs font-mono opacity-70" style="color: var(--theme-text);">
+          <div class="truncate text-[11px] mt-0.5 leading-tight" style="color: var(--muted-text);">
             {{ brand.subtitle }}
           </div>
         </div>
@@ -229,27 +229,28 @@ async function handleLogout() {
       <!-- Mobile Close Button -->
       <button
         aria-label="关闭导航"
-        class="h-11 w-11 flex flex-none items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+        class="h-11 w-11 flex flex-none items-center justify-center rounded-lg transition lg:hidden hover:bg-black/5 dark:hover:bg-white/10"
+        style="color: var(--muted-text);"
         @click="appStore.closeSidebar"
       >
         <div class="i-carbon-close text-xl" />
       </button>
     </div>
 
-    <!-- 渐变分隔线 -->
-    <div class="mx-2 mb-3 h-px flex-none" style="background: linear-gradient(90deg, color-mix(in srgb, var(--theme-primary) 45%, transparent), transparent);" />
+    <!-- 分隔线 -->
+    <div class="mx-1 mb-2 h-px flex-none" style="background: var(--surface-border);" />
 
     <!-- Navigation -->
-    <nav class="custom-scrollbar flex-1 overflow-y-auto px-1 py-1 space-y-1">
+    <nav class="custom-scrollbar flex-1 overflow-y-auto px-0.5 space-y-0.5">
       <router-link
         v-for="item in navItems"
         :key="item.path"
         :to="item.path"
         :active-class="item.path === '/' ? '' : 'router-link-active'"
         :exact-active-class="item.path === '/' ? 'router-link-active' : 'router-link-exact-active'"
-        class="nav-item group relative flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors duration-200"
+        class="nav-item group relative h-[46px] flex items-center gap-3 rounded-lg px-3 transition-colors duration-150"
       >
-        <span class="nav-icon h-9 w-9 flex flex-none items-center justify-center rounded-lg text-[22px] transition-colors duration-200">
+        <span class="nav-icon flex-none text-[20px] transition-colors duration-150">
           <div :class="[item.icon]" />
         </span>
         <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ item.label }}</span>
@@ -262,7 +263,7 @@ async function handleLogout() {
     </nav>
 
     <!-- Footer Status -->
-    <div class="relative mt-4 flex-none rounded-xl px-3 py-2.5" style="background: color-mix(in srgb, var(--surface-2) 80%, transparent);">
+    <div class="relative mt-3 flex-none border-t pt-2.5 px-1" style="border-color: var(--surface-border);">
       <div class="flex items-center justify-between text-xs">
         <div class="flex items-center gap-1.5 font-medium" style="color: var(--theme-text);">
           <span class="h-2 w-2 rounded-full" :class="[connectionStatus.color, { 'animate-pulse': connectionStatus.pulse }]" />
@@ -283,7 +284,7 @@ async function handleLogout() {
         </button>
       </div>
 
-      <div class="mt-1 flex items-center justify-between text-xs font-mono opacity-70" style="color: var(--theme-text);">
+      <div class="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] font-mono opacity-70" style="color: var(--theme-text);">
         <span>v{{ version }}</span>
         <div class="flex items-center gap-2">
           <a
@@ -294,7 +295,7 @@ async function handleLogout() {
             title="打开 GitHub 项目主页"
           >xxxscarlxrd404</a>
           <button
-            class="flex items-center gap-1 rounded px-1.5 py-0.5 transition-opacity disabled:opacity-40 hover:opacity-70"
+            class="flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 transition-opacity disabled:opacity-40 hover:opacity-70"
             :disabled="logoutLoading"
             title="退出登录并返回登录页"
             @click="handleLogout"
@@ -309,7 +310,7 @@ async function handleLogout() {
       <!-- 主题选择弹出面板 -->
       <div
         v-show="showThemeDropdown"
-        class="glass-panel absolute bottom-full left-0 right-0 z-50 grid grid-cols-4 mb-2 gap-1.5 rounded-lg p-2"
+        class="glass-panel absolute bottom-full left-0 right-0 z-50 grid grid-cols-2 mb-2 gap-1.5 rounded-lg p-2"
       >
         <button
           v-for="(t, theme) in appStore.themes"
@@ -359,47 +360,35 @@ async function handleLogout() {
 
 /* 默认态 */
 .nav-item {
-  opacity: 0.82;
+  color: var(--muted-text);
 }
 .nav-item:hover {
-  background: var(--surface-2);
-  opacity: 1;
+  background: color-mix(in srgb, var(--theme-text) 4%, transparent);
+  color: var(--theme-text);
 }
 
 /* 图标容器 */
 .nav-item .nav-icon {
-  color: color-mix(in srgb, var(--theme-text) 58%, transparent);
+  color: color-mix(in srgb, var(--theme-text) 52%, transparent);
 }
 .nav-item:hover .nav-icon {
-  background: color-mix(in srgb, var(--theme-text) 7%, transparent);
   color: var(--theme-text);
 }
 
-/* 选中态：渐变图标胶囊 + 左侧指示条 */
+/* 选中态：浅色底 + 主色文字，不加左侧色条与渐变胶囊 */
 .router-link-active.nav-item,
 .router-link-exact-active.nav-item {
-  background: color-mix(in srgb, var(--theme-primary) 9%, transparent) !important;
+  background: color-mix(in srgb, var(--theme-primary) 12%, transparent) !important;
   color: var(--theme-primary) !important;
-  opacity: 1;
+}
+
+.router-link-active.nav-item,
+.router-link-exact-active.nav-item {
+  font-weight: 600;
 }
 
 .router-link-active .nav-icon,
 .router-link-exact-active .nav-icon {
-  background: var(--theme-gradient) !important;
-  color: #fff !important;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--theme-primary) 28%, transparent);
-}
-
-.router-link-active::before,
-.router-link-exact-active::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: -4px;
-  width: 3px;
-  height: 56%;
-  transform: translateY(-50%);
-  border-radius: 0 4px 4px 0;
-  background: var(--theme-gradient);
+  color: var(--theme-primary) !important;
 }
 </style>

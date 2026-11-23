@@ -7,8 +7,8 @@ export type GameScene = 'farm' | 'ranch'
 
 /** 整站按场景换皮：顶栏和侧栏读这一份，避免两处各写一套中文名。 */
 export const SCENE_BRAND: Record<GameScene, { title: string, subtitle: string }> = {
-  farm: { title: 'QQ农场智能助手', subtitle: 'QQ FARM ASSISTANT' },
-  ranch: { title: 'QQ牧场智能助手', subtitle: 'QQ RANCH ASSISTANT' },
+  farm: { title: 'QQ农场智能助手', subtitle: '智慧农场 · 让生长有数' },
+  ranch: { title: 'QQ牧场智能助手', subtitle: '智慧牧场 · 让收获有数' },
 }
 
 export const useSceneStore = defineStore('scene', () => {
