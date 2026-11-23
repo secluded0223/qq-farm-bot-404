@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import AccountModal from '@/components/AccountModal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { getPlatformClass, getPlatformLabel } from '@/stores/account'
 
-defineProps<{
+const props = defineProps<{
   accounts: any[]
   accountsLoading: boolean
   currentAccountId: string | number | null | undefined
@@ -20,11 +21,15 @@ defineProps<{
   accountToDelete: any
   showClearStoppedConfirm: boolean
   clearStoppedLoading: boolean
+  refreshAllLoading: boolean
+  refreshingAccountId: string
 }>()
 
 const emit = defineEmits<{
   add: []
   clearStopped: []
+  refreshAll: []
+  refreshAccount: [account: any]
   select: [account: any]
   toggle: [account: any]
   settings: [account: any]
@@ -37,6 +42,41 @@ const emit = defineEmits<{
   closeClearStoppedConfirm: []
   confirmClearStopped: []
 }>()
+
+/** 微信账号的访问凭证状态：能不能自动续签看这里。 */
+function credentialState(acc: any) {
+  if (String(acc?.platform || '') !== 'wx')
+    return null
+  const hasRefresh = !!String(acc?.refreshtoken || '').trim()
+  if (!hasRefresh)
+    return { text: '未绑定（需重新扫码）', tone: 'muted' as const }
+  const error = String(acc?.wxCredentialRefreshError || '').trim()
+  if (error) {
+    // 后端文案常以「微信授权续期失败：」开头，去掉前缀避免「续期失败：续期失败：」的重复。
+    const detail = error.replace(/^(微信)?(授权)?续期失败[：:]\s*/, '')
+    return { text: `续期失败：${detail}`, tone: 'danger' as const }
+  }
+  const expiresAt = Number(acc?.expires_at) || 0
+  if (expiresAt && expiresAt <= Date.now())
+    return { text: '已过期', tone: 'danger' as const }
+  const refreshedAt = Number(acc?.wxCredentialRefreshedAt) || 0
+  if (refreshedAt)
+    return { text: `有效 · ${new Date(refreshedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 已续期`, tone: 'ok' as const }
+  return { text: '有效', tone: 'ok' as const }
+}
+
+const toneClass: Record<string, string> = {
+  ok: 'text-green-600 dark:text-green-400',
+  danger: 'text-red-600 dark:text-red-400',
+  muted: 'text-gray-500 dark:text-gray-400',
+}
+
+const credentialStates = computed(() => {
+  const map: Record<string, ReturnType<typeof credentialState>> = {}
+  for (const acc of props.accounts || [])
+    map[String(acc.id)] = credentialState(acc)
+  return map
+})
 
 function accountAvatar(acc: any) {
   const direct = String(acc?.avatar || acc?.avatarUrl || acc?.avatar_url || '').trim()
@@ -56,6 +96,17 @@ function accountAvatar(acc: any) {
         账号管理
       </h3>
       <div class="flex flex-wrap gap-2">
+        <BaseButton
+          v-if="userIsAdmin"
+          variant="secondary"
+          size="sm"
+          :loading="refreshAllLoading"
+          @click="emit('refreshAll')"
+        >
+          <div class="i-carbon-renew mr-2" />
+          <span class="hidden sm:inline">续期全部微信授权</span>
+          <span class="sm:hidden">全部续期</span>
+        </BaseButton>
         <BaseButton
           v-if="userIsAdmin"
           variant="secondary"
@@ -134,6 +185,14 @@ function accountAvatar(acc: any) {
                   {{ getPlatformLabel(acc.platform) }}
                 </span>
               </div>
+              <div
+                v-if="credentialStates[acc.id]"
+                class="mt-1 truncate text-[11px]"
+                :class="toneClass[credentialStates[acc.id]!.tone]"
+                :title="credentialStates[acc.id]!.text"
+              >
+                访问凭证：{{ credentialStates[acc.id]!.text }}
+              </div>
             </div>
           </div>
           <div class="flex items-center justify-end gap-2 sm:flex-col sm:items-end">
@@ -165,6 +224,21 @@ function accountAvatar(acc: any) {
           </div>
 
           <div class="flex flex-1 justify-end gap-1 sm:flex-initial sm:gap-2">
+            <BaseButton
+              v-if="String(acc.platform || '') === 'wx'"
+              variant="ghost"
+              class="group relative min-h-[36px] min-w-[36px] !p-2"
+              aria-label="续期授权"
+              title="续期微信授权"
+              :loading="refreshingAccountId === String(acc.id)"
+              :disabled="!!refreshingAccountId"
+              @click="emit('refreshAccount', acc)"
+            >
+              <div v-if="refreshingAccountId !== String(acc.id)" i-carbon-renew />
+              <span class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity duration-150 -translate-x-1/2 dark:bg-gray-100 dark:text-gray-900 group-focus-visible:opacity-100 group-hover:opacity-100">
+                续期
+              </span>
+            </BaseButton>
             <BaseButton
               variant="ghost"
               class="group relative min-h-[36px] min-w-[36px] !p-2"

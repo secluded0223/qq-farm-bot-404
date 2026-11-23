@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useEventListener, useIntervalFn } from '@vueuse/core'
-import { computed, reactive, ref, useId, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, useId, watch } from 'vue'
 import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
@@ -82,6 +82,86 @@ useEventListener(document, 'visibilitychange', () => {
   // 先检查原二维码，避免切回时丢弃已在微信确认的登录。
   if (!document.hidden)
     void pollWxLogin(false)
+})
+
+// ===== 抓包取 Code（备用方式）：mitmproxy 中间人截获小程序 wx.login 的 code =====
+let capturePollTimer: any = null
+const capturePhase = ref<'idle' | 'running' | 'success' | 'error'>('idle')
+const captureMessage = ref('')
+const captureError = ref('')
+
+function stopCapturePolling() {
+  if (capturePollTimer)
+    clearInterval(capturePollTimer)
+  capturePollTimer = null
+}
+
+async function pollCapture() {
+  try {
+    const { data } = await api.get('/api/wx-code/status', { skipErrorToast: true } as any)
+    const status = data?.data || {}
+    if (status.message)
+      captureMessage.value = String(status.message)
+    if (status.phase === 'success' && status.code) {
+      stopCapturePolling()
+      capturePhase.value = 'success'
+      const name = wxAccountName.value.trim() || props.editData?.name || `微信账号${Date.now()}`
+      await addAccount({
+        id: props.editData?.id,
+        name,
+        code: String(status.code),
+        platform: 'wx',
+        loginType: 'wx_capture',
+        startAfterSave: true,
+      })
+    }
+    else if (status.phase === 'error') {
+      stopCapturePolling()
+      capturePhase.value = 'error'
+      captureError.value = String(status.message || '抓包失败')
+    }
+  }
+  catch {
+    // 轮询失败下一轮继续
+  }
+}
+
+async function startCapture() {
+  if (capturePhase.value === 'running')
+    return
+  capturePhase.value = 'running'
+  captureMessage.value = '正在启动本地抓包…'
+  captureError.value = ''
+  try {
+    const { data } = await api.post('/api/wx-code/start', undefined, { timeout: 30000, skipErrorToast: true } as any)
+    if (!data?.ok)
+      throw new Error(data?.error || '启动抓包失败')
+    captureMessage.value = String(data.data?.message || '请在微信中重新打开 QQ 农场小程序')
+    stopCapturePolling()
+    capturePollTimer = setInterval(() => { void pollCapture() }, 1000)
+  }
+  catch (error: any) {
+    capturePhase.value = 'error'
+    captureError.value = error.response?.data?.error || error.message || '启动抓包失败'
+  }
+}
+
+async function cancelCapture() {
+  stopCapturePolling()
+  capturePhase.value = 'idle'
+  captureMessage.value = ''
+  try {
+    await api.post('/api/wx-code/cancel', undefined, { skipErrorToast: true } as any)
+  }
+  catch {
+    // 忽略取消失败
+  }
+}
+
+onUnmounted(() => {
+  stopCapturePolling()
+  if (capturePhase.value === 'running')
+    void cancelCapture()
 })
 
 const { pause: stopQqCheck, resume: startQqCheck } = useIntervalFn(async () => {
@@ -442,6 +522,38 @@ useModalFocus(() => props.show, modalSurface, close)
 
           <div class="text-center text-xs opacity-60" :style="{ color: 'var(--theme-text)' }">
             使用微信扫描二维码登录，成功后会自动添加账号
+          </div>
+
+          <div class="border-t pt-3" :style="{ borderColor: 'color-mix(in srgb, var(--theme-text) 12%, transparent)' }">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="text-sm font-medium" :style="{ color: 'var(--theme-text)' }">
+                  抓包取 Code（备用）
+                </div>
+                <div class="mt-0.5 text-xs opacity-70" :style="{ color: 'var(--theme-text)' }">
+                  本机需安装 mitmproxy。启动后会临时修改系统代理并重启微信小程序，抓到 Code 立即还原代理。
+                </div>
+              </div>
+              <div class="flex shrink-0 gap-2">
+                <BaseButton
+                  v-if="capturePhase !== 'running'"
+                  size="sm"
+                  variant="secondary"
+                  @click="startCapture"
+                >
+                  开始抓取
+                </BaseButton>
+                <BaseButton v-else size="sm" variant="secondary" @click="cancelCapture">
+                  取消
+                </BaseButton>
+              </div>
+            </div>
+            <p v-if="captureMessage" class="mt-1 text-xs opacity-80" :style="{ color: 'var(--theme-text)' }">
+              {{ captureMessage }}
+            </p>
+            <p v-if="captureError" class="mt-1 text-xs text-red-600 dark:text-red-400">
+              {{ captureError }}
+            </p>
           </div>
         </div>
 

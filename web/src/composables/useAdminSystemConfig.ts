@@ -15,6 +15,8 @@ export interface SystemConfig {
   os: string
   /** 账号保活：定时重登与掉线重登，只对具备微信刷新凭证的账号生效。 */
   autoCodeRefresh?: AutoCodeRefreshConfig
+  /** 服务启动后是否自动拉起已保存的账号。 */
+  autoStartAccounts?: boolean
 }
 
 interface UseAdminSystemConfigOptions {
@@ -34,6 +36,7 @@ const defaultSystemConfigValues: SystemConfig = {
   platform: 'qq',
   os: 'iOS',
   autoCodeRefresh: { ...defaultAutoCodeRefresh },
+  autoStartAccounts: true,
 }
 
 export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {

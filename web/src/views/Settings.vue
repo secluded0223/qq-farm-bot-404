@@ -5,6 +5,7 @@ import api from '@/api'
 import AdminSystemPanel from '@/components/admin/AdminSystemPanel.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import AccountFeatureSettings from '@/components/settings/AccountFeatureSettings.vue'
+import AccountKeepAliveCard from '@/components/settings/AccountKeepAliveCard.vue'
 import AccountSettingsTab from '@/components/settings/AccountSettingsTab.vue'
 import OfflineReminderCard from '@/components/settings/OfflineReminderCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -115,6 +116,10 @@ const {
   accountToDelete,
   showClearStoppedConfirm,
   clearStoppedLoading,
+  refreshAllLoading,
+  refreshingAccountId,
+  refreshAllCredentials,
+  refreshAccountCredential,
   stoppedAccountsCount,
   isAddAccountDisabled,
   addAccountDisabledReason,
@@ -281,8 +286,12 @@ onMounted(async () => {
           :account-to-delete="accountToDelete"
           :show-clear-stopped-confirm="showClearStoppedConfirm"
           :clear-stopped-loading="clearStoppedLoading"
+          :refresh-all-loading="refreshAllLoading"
+          :refreshing-account-id="refreshingAccountId"
           @add="openAddModal"
           @clear-stopped="openClearStoppedConfirm"
+          @refresh-all="refreshAllCredentials"
+          @refresh-account="refreshAccountCredential"
           @select="selectAccount"
           @toggle="toggleAccount"
           @settings="openAccountSettings"
@@ -294,6 +303,14 @@ onMounted(async () => {
           @confirm-delete="confirmDelete"
           @close-clear-stopped-confirm="showClearStoppedConfirm = false"
           @confirm-clear-stopped="confirmClearStopped"
+        />
+
+        <AccountKeepAliveCard
+          v-if="activeTab === 'account'"
+          v-model:local-system-config="localSystemConfig"
+          :saving="systemSettingsSaving"
+          class="mt-4"
+          @save="saveSystemSettings"
         />
 
         <AccountFeatureSettings

@@ -2,6 +2,7 @@ import { useIntervalFn } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import api from '@/api'
 import { useAccountStore } from '@/stores/account'
 import { useUserStore } from '@/stores/user'
 
@@ -20,6 +21,8 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
   const accountToDelete = ref<any>(null)
   const showClearStoppedConfirm = ref(false)
   const clearStoppedLoading = ref(false)
+  const refreshAllLoading = ref(false)
+  const refreshingAccountId = ref('')
 
   const userIsAdmin = computed(() => userStore.isAdmin)
   const isAccountOpsDisabled = computed(() => !userStore.isAdmin && userStore.isExpired)
@@ -121,6 +124,51 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     accountStore.selectAccount(String(account.id))
   }
 
+  /** 批量续期微信授权：后端逐账号刷新 refreshtoken 并写回新 Code。 */
+  async function refreshAllCredentials() {
+    if (refreshAllLoading.value)
+      return
+    refreshAllLoading.value = true
+    try {
+      const { data } = await api.post('/api/accounts/refresh-wx-credentials', undefined, { timeout: 120000 } as any)
+      const summary = data?.data || {}
+      const success = Number(summary.success) || 0
+      const failed = Number(summary.failed) || 0
+      if (!data?.ok)
+        showAlert(data?.error || `续期失败：成功 ${success} 个，失败 ${failed} 个`, 'danger')
+      else
+        showAlert(`续期完成：成功 ${success} 个${summary.skipped ? `，跳过 ${summary.skipped} 个无凭证账号` : ''}`, 'primary')
+      await accountStore.fetchAccounts()
+    }
+    catch (error: any) {
+      showAlert(error.response?.data?.error || error.message || '续期失败', 'danger')
+    }
+    finally {
+      refreshAllLoading.value = false
+    }
+  }
+
+  /** 单账号续期。 */
+  async function refreshAccountCredential(account: any) {
+    const id = String(account?.id || '')
+    if (!id || refreshingAccountId.value)
+      return
+    refreshingAccountId.value = id
+    try {
+      const { data } = await api.post(`/api/accounts/${id}/refresh-wx-credential`, undefined, { timeout: 60000 } as any)
+      if (!data?.ok)
+        throw new Error(data?.error || '续期失败')
+      showAlert(`账号 ${account.name || id} 微信授权已续期`, 'primary')
+      await accountStore.fetchAccounts()
+    }
+    catch (error: any) {
+      showAlert(error.response?.data?.error || error.message || '续期失败', 'danger')
+    }
+    finally {
+      refreshingAccountId.value = ''
+    }
+  }
+
   function openClearStoppedConfirm() {
     if (stoppedAccountsCount.value === 0) {
       showAlert('没有已停止的账号需要清理', 'primary')
@@ -165,6 +213,8 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     accountToDelete,
     showClearStoppedConfirm,
     clearStoppedLoading,
+    refreshAllLoading,
+    refreshingAccountId,
     stoppedAccountsCount,
     isAddAccountDisabled,
     addAccountDisabledReason,
@@ -181,5 +231,7 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     selectAccount,
     openClearStoppedConfirm,
     confirmClearStopped,
+    refreshAllCredentials,
+    refreshAccountCredential,
   }
 }
