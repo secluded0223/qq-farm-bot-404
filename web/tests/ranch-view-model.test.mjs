@@ -10,13 +10,21 @@ import {
   buildRanchExecuteBody,
   describeOperateResult,
   describeQuote,
+  friendGrassLimit,
+  friendGrassRoom,
   grassRoom,
   isRanchDirectAction,
+  isRanchFeedStage,
   isRanchUnlocked,
   mapRanchState,
   RANCH_ACTION_FIELDS,
   RANCH_ACTION_REQUIRED,
   RANCH_ACTIONS,
+  RANCH_AUTOMATION_DEFAULTS,
+  RANCH_FEED_STAGE_HINTS,
+  RANCH_FEED_STAGE_LABELS,
+  RANCH_FEED_STAGE_OPTIONS,
+  RANCH_FEED_STAGES,
   RANCH_FIELD_LABELS,
   RANCH_VIEWS,
   taskRatio,
@@ -471,6 +479,58 @@ test('好友栏舍的动物没有自家动作位', () => {
   assert.equal(state.friendRanch.ranches[0].shelves[0].canSteal, true)
 })
 
+test('好友牧草机：余量、库存上限都按字符串大数换算，缺字段时不猜可送数量', () => {
+  // 上限取「背包可用」与「对方机器剩余」的较小值，两边都是十进制字符串。
+  assert.equal(friendGrassRoom({ count: '90', capacity: '100' }), 10)
+  assert.equal(friendGrassRoom({ count: '100', capacity: '100' }), 0, '装满时余量为 0，不能算出负数')
+  assert.equal(friendGrassRoom(null), 0, '没有牧草机的对象不能当成可送')
+
+  assert.equal(friendGrassLimit({ feedMachine: { count: '0', capacity: '100' }, grassAvailable: '35' }), 35)
+  assert.equal(friendGrassLimit({ feedMachine: { count: '95', capacity: '100' }, grassAvailable: '35' }), 5)
+  assert.equal(friendGrassLimit({ feedMachine: { count: '0', capacity: '100' }, grassAvailable: '0' }), 0)
+  // 未下发 grassAvailable 时按 0 处理：宁可按钮禁用，也不能让用户提交一个后端必然拒绝的数量。
+  assert.equal(friendGrassLimit({ feedMachine: { count: '0', capacity: '100' } }), 0)
+  assert.equal(friendGrassLimit(null), 0)
+})
+
+test('好友赠送牧草带 hostGid 下发，自家补草仍然只有设施与数量', () => {
+  assert.deepEqual(buildRanchBody('addGrass', { hostGid: '88001', facilityId: '1:9', count: 12 }), {
+    ok: true,
+    body: { hostGid: '88001', facilityId: '1:9', count: 12 },
+  })
+  assert.deepEqual(buildRanchBody('addGrass', { facilityId: '1:9', count: 5 }), {
+    ok: true,
+    body: { facilityId: '1:9', count: 5 },
+  })
+  // hostGid 是可选字段：空串不能当成「送给空好友」，直接丢弃即可。
+  assert.deepEqual(buildRanchBody('addGrass', { hostGid: '', facilityId: '1:9', count: 5 }), {
+    ok: true,
+    body: { facilityId: '1:9', count: 5 },
+  })
+  assert.equal(buildRanchBody('addGrass', { hostGid: '88001', count: 5 }).ok, false)
+})
+
+test('好友详情带出牧草机与可送牧草，未下发时保持 null 而不是零值对象', () => {
+  const withMachine = mapRanchState(baseState({
+    friendRanch: {
+      gid: '88001',
+      name: '小明',
+      level: 20,
+      feedMachine: { id: '1:9', count: '40', capacity: '100' },
+      grassAvailable: '25',
+      ranches: [],
+    },
+  }))
+  assert.deepEqual(withMachine.friendRanch.feedMachine, { id: '1:9', count: '40', capacity: '100' })
+  assert.equal(withMachine.friendRanch.grassAvailable, '25')
+
+  const withoutMachine = mapRanchState(baseState({
+    friendRanch: { gid: '88002', name: '小红', level: 12, ranches: [] },
+  }))
+  assert.equal(withoutMachine.friendRanch.feedMachine, null, '对方没建牧草机时不能拼出零容量对象')
+  assert.equal(withoutMachine.friendRanch.grassAvailable, '0')
+})
+
 test('未解锁的牧场只给出后端原因，不渲染零值快照', () => {
   assert.equal(isRanchUnlocked(baseState({ unlocked: false })), false)
   assert.equal(isRanchUnlocked(null), false)
@@ -554,4 +614,40 @@ test('礼包商城购买与罐头购买走同一套校验，但动作名不能�
   assert.equal(buildRanchBody('buyMall', { goodsId: '9001' }).ok, false)
   // buyCan 的入参形态一致，但动作名不同，不能互相顶替。
   assert.equal(buildRanchBody('buyCan', { goodsId: '9001', count: 1 }).ok, true)
+})
+
+test('罐头使用时机：四态常量完整，普通与有机各有一份默认值', () => {
+  assert.deepEqual([...RANCH_FEED_STAGES], ['any', 'longest', 'to_production', 'near_harvest'])
+  // 选项必须覆盖全部取值，否则设置页会漏掉后端认识的某个时机。
+  assert.deepEqual([...RANCH_FEED_STAGE_OPTIONS.map(option => option.value)].sort(), [...RANCH_FEED_STAGES].sort())
+  for (const option of RANCH_FEED_STAGE_OPTIONS) {
+    assert.ok(option.label, `${option.value} 缺少选项名`)
+    // 选中后要有一段说明，只给名字用户没法判断哪种更省罐头。
+    assert.ok(RANCH_FEED_STAGE_LABELS[option.value])
+    assert.ok(RANCH_FEED_STAGE_HINTS[option.value])
+  }
+  assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_feed_normal_stage, 'longest')
+  // 有机罐头更贵，默认留到快收获时用，与后端默认一致。
+  assert.equal(RANCH_AUTOMATION_DEFAULTS.ranch_feed_organic_stage, 'near_harvest')
+  assert.equal(isRanchFeedStage('near_harvest'), true)
+  for (const bad of ['', 'near_harvest ', 'to_production_x', null, 2])
+    assert.equal(isRanchFeedStage(bad), false, `应拒绝 ${JSON.stringify(bad)}`)
+})
+
+test('喂养请求按桶类型带不同的时机字段，未登记字段仍被丢弃', () => {
+  assert.deepEqual(
+    buildRanchBody('feed', { all: true, bucketType: 2, normalStage: 'to_production' }),
+    { ok: true, body: { all: true, bucketType: 2, normalStage: 'to_production' } },
+  )
+  assert.deepEqual(
+    buildRanchBody('feed', { all: true, bucketType: 1, organicStage: 'near_harvest' }),
+    { ok: true, body: { all: true, bucketType: 1, organicStage: 'near_harvest' } },
+  )
+  assert.deepEqual(
+    buildRanchBody('feed', { all: true, bucketType: 1, organicStage: 'any', unknownStage: 'x' }).body,
+    { all: true, bucketType: 1, organicStage: 'any' },
+  )
+  // 两个时机字段都要有可读名称，否则确认弹窗里会出现原始键名。
+  assert.ok(RANCH_FIELD_LABELS.normalStage)
+  assert.ok(RANCH_FIELD_LABELS.organicStage)
 })

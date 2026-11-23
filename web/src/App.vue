@@ -30,12 +30,10 @@ onMounted(() => {
 body {
   margin: 0;
   font-family:
-    Inter,
-    'Microsoft YaHei',
-    'PingFang SC',
+    system-ui,
     -apple-system,
     BlinkMacSystemFont,
-    system-ui,
+    'PingFang SC',
     sans-serif;
   line-height: 1.5;
   font-optical-sizing: auto;
@@ -44,79 +42,44 @@ body {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
 
-/* 农场色板：浅色沿用旧版奶油绿体系，深色沿用旧版夜耕体系 */
+/* Color theme variables */
 :root {
-  --theme-bg: #edf3e5;
-  --theme-text: #203d31;
-  --theme-primary: #238452;
-  --theme-secondary: #3f9c6b;
-  --theme-gradient: linear-gradient(135deg, #40975c 0%, #238452 100%);
-  --app-bg: #edf3e5;
-  --surface-1: #ffffff;
-  --surface-2: #f4f7f5;
-  --surface-3: #e8efea;
-  --surface-border: #dfe7e2;
-  --surface-border-strong: #c9d7ce;
-  --surface-shadow: 0 12px 32px rgb(45 70 31 / 7%);
-  --surface-shadow-soft: 0 4px 18px rgb(45 70 31 / 4%);
-  --muted-text: #586b62;
-  --subtle-text: #8a9a91;
-  --input-bg: #ffffff;
-  --panel-glow: color-mix(in srgb, var(--theme-primary) 6%, transparent);
-  --table-head: #eef4e8;
-  --radius-card: 8px;
-  --radius-control: 8px;
-  --farm-accent: #f9c75a;
-  --farm-sidebar: #fffef8;
-  --farm-header: rgb(255 254 248 / 95%);
-  --farm-scene: url(/backgrounds/farm-day.webp);
-  --farm-scene-overlay: linear-gradient(180deg, rgb(237 246 232 / 66%), rgb(237 246 232 / 92%));
+  --theme-bg: #f8fafc;
+  --theme-text: #172033;
+  --theme-primary: #3b82f6;
+  --theme-secondary: #2563eb;
+  --theme-gradient: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  --app-bg: linear-gradient(180deg, #f6f8fb 0%, #eef3f8 100%);
+  --surface-1: color-mix(in srgb, var(--theme-bg) 8%, #ffffff);
+  --surface-2: color-mix(in srgb, var(--theme-bg) 22%, #ffffff);
+  --surface-3: color-mix(in srgb, var(--theme-bg) 40%, #ffffff);
+  --surface-border: rgba(15, 23, 42, 0.09);
+  --surface-border-strong: rgba(15, 23, 42, 0.14);
+  --surface-shadow: 0 16px 45px rgba(15, 23, 42, 0.08);
+  --surface-shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.06);
+  --muted-text: #64748b;
+  --input-bg: rgba(255, 255, 255, 0.84);
+  --panel-glow: color-mix(in srgb, var(--theme-primary) 14%, transparent);
 }
 
 .dark {
-  --theme-bg: #111418;
-  --theme-text: #e4e8ec;
-  --theme-primary: #5bbd88;
-  --theme-secondary: #6cc2b2;
-  --theme-gradient: linear-gradient(135deg, #40975c 0%, #238452 100%);
-  --app-bg: #111418;
-  --surface-1: #1a1f25;
-  --surface-2: #242a32;
-  --surface-3: #20262d;
-  --surface-border: rgba(255, 255, 255, 0.07);
-  --surface-border-strong: rgba(255, 255, 255, 0.12);
-  --surface-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
-  --surface-shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.32);
-  --muted-text: #a3acb6;
-  --subtle-text: #78818c;
-  --input-bg: #1a1f25;
-  --panel-glow: color-mix(in srgb, var(--theme-primary) 10%, transparent);
-  --table-head: #242a32;
-  --farm-sidebar: #15191e;
-  --farm-header: rgb(17 20 24 / 95%);
-  --farm-scene-overlay: linear-gradient(180deg, rgb(14 24 18 / 74%), rgb(14 24 18 / 90%));
-}
-
-@media (max-width: 639px) {
-  :root {
-    --farm-scene: url(/backgrounds/farm-day-mobile.webp);
-  }
+  --app-bg:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--theme-primary) 16%, transparent) 0, transparent 28rem),
+    linear-gradient(180deg, #0b1020 0%, color-mix(in srgb, var(--theme-bg) 74%, #020617) 100%);
+  --surface-1: color-mix(in srgb, var(--theme-bg) 72%, #ffffff 9%);
+  --surface-2: color-mix(in srgb, var(--theme-bg) 78%, #ffffff 6%);
+  --surface-3: color-mix(in srgb, var(--theme-bg) 84%, #ffffff 4%);
+  --surface-border: rgba(255, 255, 255, 0.09);
+  --surface-border-strong: rgba(255, 255, 255, 0.14);
+  --surface-shadow: 0 18px 55px rgba(0, 0, 0, 0.34);
+  --surface-shadow-soft: 0 10px 28px rgba(0, 0, 0, 0.24);
+  --muted-text: #9ca3af;
+  --input-bg: rgba(15, 23, 42, 0.54);
+  --panel-glow: color-mix(in srgb, var(--theme-primary) 18%, transparent);
 }
 
 .app-root {
-  position: relative;
-  isolation: isolate;
   background: var(--app-bg);
-}
-
-/* 农场实景底图：整站铺一张，靠半透明遮罩压住，保证前景可读 */
-.app-root::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: var(--farm-scene-overlay), var(--farm-scene) center / cover;
 }
 
 /* SaaS surface system */
@@ -139,61 +102,34 @@ body {
 
 .ui-card {
   border: 1px solid var(--surface-border);
-  background: var(--surface-1);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 96%, #ffffff 4%), var(--surface-1));
   box-shadow: var(--surface-shadow-soft);
 }
 
 .ui-card-elevated {
   border: 1px solid var(--surface-border);
-  background: var(--surface-1);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-1) 92%, #ffffff 8%), var(--surface-1));
   box-shadow: var(--surface-shadow);
 }
 
 .ui-subtle-panel {
   border: 1px solid var(--surface-border);
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--surface-2) 86%, transparent);
 }
 
 .glass-panel {
   border: 1px solid var(--surface-border);
-  background: var(--farm-header);
-  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--surface-1) 78%, transparent);
+  backdrop-filter: blur(20px);
   box-shadow: var(--surface-shadow-soft);
-}
-
-/* 农场按钮：主操作实心主色，次要操作白底描边，避免多色按钮并列 */
-.farm-btn-primary {
-  background: var(--theme-primary);
-  border: 1px solid var(--theme-primary);
-  color: #fff;
-}
-.farm-btn-primary:hover {
-  filter: brightness(1.06);
-}
-
-.farm-btn-soft {
-  background: var(--surface-1);
-  border: 1px solid var(--surface-border);
-  color: var(--theme-text);
-}
-.farm-btn-soft:hover {
-  background: var(--surface-2);
-  border-color: var(--surface-border-strong);
-}
-
-.farm-btn-accent {
-  background: color-mix(in srgb, var(--farm-accent) 16%, var(--surface-1));
-  border: 1px solid color-mix(in srgb, var(--farm-accent) 50%, var(--surface-border));
-  color: var(--theme-text);
-}
-.farm-btn-accent:hover {
-  background: color-mix(in srgb, var(--farm-accent) 28%, var(--surface-1));
 }
 
 .metric-card {
   position: relative;
   overflow: hidden;
-}.metric-card::before {
+}
+
+.metric-card::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -250,7 +186,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--theme-primary) 34%, var(--surface-border-strong));
+  background: color-mix(in srgb, var(--theme-primary) 50%, #94a3b8);
   border-radius: 999px;
 }
 

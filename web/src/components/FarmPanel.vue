@@ -132,11 +132,11 @@ function handleFertilizeAllClick() {
 }
 
 const operations = [
-  { type: 'harvest', label: '收获', icon: 'i-carbon-wheat', color: 'farm-btn-primary' },
-  { type: 'clear', label: '一键务农', icon: 'i-carbon-clean', color: 'farm-btn-soft' },
-  { type: 'plant', label: '种植', icon: 'i-carbon-sprout', color: 'farm-btn-soft' },
-  { type: 'upgrade', label: '升级土地', icon: 'i-carbon-upgrade', color: 'farm-btn-soft' },
-  { type: 'all', label: '一键全收', icon: 'i-carbon-flash', color: 'farm-btn-accent' },
+  { type: 'harvest', label: '收获', icon: 'i-carbon-wheat', color: 'bg-blue-600 hover:bg-blue-700' },
+  { type: 'clear', label: '一键务农', icon: 'i-carbon-clean', color: 'bg-teal-600 hover:bg-teal-700' },
+  { type: 'plant', label: '种植', icon: 'i-carbon-sprout', color: 'bg-green-600 hover:bg-green-700' },
+  { type: 'upgrade', label: '升级土地', icon: 'i-carbon-upgrade', color: 'bg-purple-600 hover:bg-purple-700' },
+  { type: 'all', label: '一键全收', icon: 'i-carbon-flash', color: 'bg-orange-600 hover:bg-orange-700' },
 ]
 
 // ===== 催熟全部：先预览化肥消耗，确认后逐批执行 =====
@@ -322,7 +322,7 @@ onUnmounted(() => {
           <button
             v-for="op in operations"
             :key="op.type"
-            class="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex items-center justify-center gap-1.5 rounded px-3 py-2 text-sm text-white transition disabled:cursor-not-allowed disabled:opacity-50"
             :class="op.color"
             :disabled="operating"
             @click="handleOperate(op.type)"
@@ -332,7 +332,7 @@ onUnmounted(() => {
             <span class="sm:hidden">{{ op.type === 'clear' ? '务农' : op.label.replace('一键', '') }}</span>
           </button>
           <button
-            class="farm-btn-soft flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex items-center justify-center gap-1.5 rounded bg-lime-600 px-3 py-2 text-sm text-white transition disabled:cursor-not-allowed hover:bg-lime-700 disabled:opacity-50"
             :disabled="operating"
             title="对全部生长中的作物使用有机肥料催熟"
             @click="handleFertilizeAllClick"
@@ -342,7 +342,7 @@ onUnmounted(() => {
             <span class="sm:hidden">施肥</span>
           </button>
           <button
-            class="farm-btn-soft flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex items-center justify-center gap-1.5 rounded bg-amber-600 px-3 py-2 text-sm text-white transition disabled:cursor-not-allowed hover:bg-amber-700 disabled:opacity-50"
             :disabled="operating || ripenLoading || ripenRunning"
             title="催熟全部作物，先预览化肥消耗"
             @click="openRipenAllPreview"
@@ -535,7 +535,7 @@ onUnmounted(() => {
 
         <div class="mt-4 flex justify-end gap-2">
           <button
-            class="farm-btn-soft rounded-lg px-3 py-2 text-sm transition"
+            class="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200"
             :disabled="ripenRunning"
             @click="closeRipen"
           >
@@ -543,7 +543,8 @@ onUnmounted(() => {
           </button>
           <button
             v-if="!ripenError && ripenPreview.sufficient && ripenPreview.targetCount"
-            class="farm-btn-primary rounded-lg px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-50"
+            class="rounded px-3 py-2 text-sm text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+            :style="{ background: 'var(--theme-primary)' }"
             :disabled="ripenRunning"
             @click="runRipenAll"
           >

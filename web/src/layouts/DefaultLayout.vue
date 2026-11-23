@@ -20,14 +20,6 @@ const brandTitle = computed(() => (scene.value === 'ranch'
   ? SCENE_BRAND.ranch.title
   : loginPageConfig.value.title || SCENE_BRAND.farm.title))
 
-// 顶栏面包屑：场景 + 当前页，替代与侧栏重复的品牌名
-const sceneLabel = computed(() => (scene.value === 'ranch' ? '牧场' : '农场'))
-const currentLabel = computed(() => {
-  const path = router.currentRoute.value.path
-  const item = menuRoutes.find(i => (i.path ? `/${i.path}` : '/') === path)
-  return item?.label || ''
-})
-
 // 宠物和分析只有农场有，切到牧场场景后停在原路由会看到与场景对不上的页面，
 // 所以跟着菜单一起回到两个场景都有的个人页。
 const availablePaths = computed(() => new Set(
@@ -47,7 +39,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="w-screen flex overflow-hidden" style="height: 100dvh; background: transparent;">
+  <div class="w-screen flex overflow-hidden bg-gray-50 dark:bg-gray-900" style="height: 100dvh;">
     <!-- Mobile Sidebar Overlay -->
     <div
       v-if="sidebarOpen"
@@ -58,22 +50,26 @@ onUnmounted(() => {
     <Sidebar />
 
     <main class="relative h-full min-h-0 min-w-0 flex flex-1 flex-col overflow-hidden">
-      <header class="relative z-30 h-16 flex shrink-0 items-center justify-between border-b px-4 md:px-5" style="background: var(--farm-header); border-color: var(--surface-border);">
+      <header class="glass-panel relative z-30 mx-2 mt-2 h-16 flex shrink-0 items-center justify-between rounded-lg px-4 md:mx-4 md:mt-4 md:px-5">
         <div class="min-w-0 flex items-center gap-3">
           <button
             aria-label="打开导航"
             :aria-expanded="sidebarOpen"
-            class="h-9 w-9 flex items-center justify-center rounded-lg transition lg:hidden hover:bg-black/5 dark:hover:bg-white/10"
-            style="color: var(--muted-text);"
+            class="h-11 w-11 flex items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
             @click="appStore.toggleSidebar"
           >
             <div class="i-carbon-menu text-xl" />
           </button>
-          <nav class="min-w-0 flex items-center gap-2 text-sm" aria-label="当前位置">
-            <span class="hidden shrink-0 lg:inline" style="color: var(--muted-text);">{{ sceneLabel }}</span>
-            <div class="i-carbon-chevron-right hidden shrink-0 text-xs lg:block" style="color: var(--subtle-text);" />
-            <span class="truncate font-semibold" style="color: var(--theme-text);">{{ currentLabel || brandTitle }}</span>
-          </nav>
+          <div class="h-8 w-8 flex flex-none items-center justify-center overflow-hidden rounded-full ring-1 ring-gray-200 dark:ring-gray-700">
+            <img
+              src="/icon.png"
+              :alt="`${loginPageConfig.title || 'QQ农场智能助手'}图标`"
+              class="h-full w-full object-cover"
+            >
+          </div>
+          <div class="truncate text-base text-gray-900 font-semibold md:text-lg dark:text-gray-100">
+            {{ brandTitle }}
+          </div>
         </div>
 
         <div class="flex shrink-0 items-center gap-1">
