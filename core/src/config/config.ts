@@ -35,6 +35,8 @@ interface SystemConfig {
     deviceInfo: DeviceInfo;
     /** 账号保活：定时重登与掉线重登，只对具备微信刷新凭证的账号生效。 */
     autoCodeRefresh?: AutoCodeRefreshConfig;
+    /** 服务启动后是否自动拉起已保存的账号。 */
+    autoStartAccounts?: boolean;
 }
 
 interface RuntimeConfig extends SystemConfig {
@@ -231,6 +233,7 @@ const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
     timeZone: DEFAULT_TIME_ZONE,
     deviceInfo: { ...DEFAULT_DEVICE_INFO },
     autoCodeRefresh: { ...DEFAULT_AUTO_CODE_REFRESH },
+    autoStartAccounts: true,
 };
 
 const CONFIG: RuntimeConfig = {
@@ -244,6 +247,7 @@ const CONFIG: RuntimeConfig = {
     timeZone: DEFAULT_SYSTEM_CONFIG.timeZone,
     deviceInfo: { ...DEFAULT_DEVICE_INFO },
     autoCodeRefresh: { ...DEFAULT_AUTO_CODE_REFRESH },
+    autoStartAccounts: true,
     heartbeatInterval: 25000,
     farmCheckInterval: 3000,
     friendCheckInterval: 12000,
@@ -301,6 +305,9 @@ function updateRuntimeConfig(newConfig: Partial<SystemConfig>): void {
     if (newConfig.autoCodeRefresh !== undefined) {
         CONFIG.autoCodeRefresh = normalizeAutoCodeRefresh(newConfig.autoCodeRefresh);
     }
+    if (newConfig.autoStartAccounts !== undefined) {
+        CONFIG.autoStartAccounts = newConfig.autoStartAccounts === true;
+    }
     if (newConfig.deviceInfo) {
         CONFIG.deviceInfo = normalizeDeviceInfo(newConfig.deviceInfo);
         // 同步 os 与 clientVersion 到顶层
@@ -321,7 +328,13 @@ function getRuntimeConfig(): SystemConfig {
         timeZone: CONFIG.timeZone,
         deviceInfo: { ...CONFIG.deviceInfo },
         autoCodeRefresh: { ...CONFIG.autoCodeRefresh },
+        autoStartAccounts: CONFIG.autoStartAccounts !== false,
     };
+}
+
+/** 未配置时按默认开启，避免历史数据缺字段导致不自动登录。 */
+function resolveAutoStartAccounts(value: unknown): boolean {
+    return value !== false;
 }
 
 function getDefaultSystemConfig(): SystemConfig {
@@ -329,6 +342,7 @@ function getDefaultSystemConfig(): SystemConfig {
         ...DEFAULT_SYSTEM_CONFIG,
         deviceInfo: { ...DEFAULT_DEVICE_INFO },
         autoCodeRefresh: { ...DEFAULT_AUTO_CODE_REFRESH },
+        autoStartAccounts: DEFAULT_SYSTEM_CONFIG.autoStartAccounts !== false,
     };
 }
 
@@ -376,5 +390,6 @@ module.exports = {
     resolveClientVersionUpdatedAt,
     normalizeAutoCodeRefresh,
     DEFAULT_AUTO_CODE_REFRESH,
+    resolveAutoStartAccounts,
     DEVICE_PRESETS,
 };

@@ -152,6 +152,8 @@ export interface SystemConfig {
   deviceInfo: DeviceInfo;
   /** 账号保活：定时重登与掉线重登。 */
   autoCodeRefresh?: AutoCodeRefreshConfig;
+  /** 服务启动后是否自动拉起已保存的账号。 */
+  autoStartAccounts?: boolean;
 }
 
 export interface GlobalConfig {

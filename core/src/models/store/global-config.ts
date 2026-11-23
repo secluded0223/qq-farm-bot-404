@@ -176,6 +176,10 @@ function setSystemConfig(config: Partial<SystemConfig> | undefined): SystemConfi
         autoCodeRefresh: normalizeAutoCodeRefresh(
             config.autoCodeRefresh !== undefined ? config.autoCodeRefresh : current?.autoCodeRefresh,
         ),
+        // 未传时沿用已保存值；历史数据没有该字段时按默认开启处理。
+        autoStartAccounts: typeof config.autoStartAccounts === 'boolean'
+            ? config.autoStartAccounts
+            : (current?.autoStartAccounts !== false),
     };
     saveGlobalConfig({ systemConfig: next });
     return { ...globalConfig.systemConfig };

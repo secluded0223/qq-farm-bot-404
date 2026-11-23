@@ -20,6 +20,8 @@ const {
 } = require(`${baseDir}/controllers/admin`);
 const { createRuntimeEngine } = require(`${baseDir}/runtime/runtime-engine`);
 const { createModuleLogger } = require(`${baseDir}/services/logger`);
+const { resolveAutoStartAccounts } = require(`${baseDir}/config/config`);
+const store = require(`${baseDir}/models/store`);
 const mainLogger = createModuleLogger('main');
 
 // 打包后 worker 由当前可执行文件以 --worker 模式启动
@@ -46,9 +48,13 @@ if (isWorkerProcess) {
         },
     });
 
+    const savedSystemConfig = typeof store.getSystemConfig === 'function' ? store.getSystemConfig() : null;
+    const autoStartAccounts = resolveAutoStartAccounts(savedSystemConfig?.autoStartAccounts);
+    mainLogger.info('auto login on boot', { autoStartAccounts });
+
     runtimeEngine.start({
         startAdminServer: true,
-        autoStartAccounts: false,
+        autoStartAccounts,
     }).catch((err: any) => {
         mainLogger.error('runtime bootstrap failed', { error: err && err.message ? err.message : String(err) });
     });

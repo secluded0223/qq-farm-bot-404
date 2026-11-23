@@ -159,6 +159,100 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
         }
     });
 
+    // API: 批量续期微信授权。返回每个账号的结果，前端据此提示成功/失败数量。
+    async function refreshWxCredentials(req: Request, res: Response): Promise<void> {
+        try {
+            const { hasWxCredential, refreshAccountCredential } = require('../../services/wx-credential');
+            const accounts = (ctx.provider.getAccounts().accounts || []);
+            const wxAccounts = accounts.filter((account: any) => String(account.platform || '') === 'wx');
+            const targetAccounts = wxAccounts.filter((account: any) => hasWxCredential(account));
+            if (targetAccounts.length === 0) {
+                res.json({
+                    ok: false,
+                    error: wxAccounts.length === 0 ? '当前没有微信账号' : '没有可续期的微信账号，请重新扫码登录',
+                    data: { total: 0, success: 0, failed: 0, skipped: wxAccounts.length },
+                });
+                return;
+            }
+            const results: any[] = [];
+            for (const account of targetAccounts) {
+                const result = await refreshAccountCredential(account.id);
+                results.push({
+                    accountId: String(account.id),
+                    name: result.accountName,
+                    ok: result.ok,
+                    error: result.ok ? '' : (result.error || '续期失败'),
+                });
+            }
+            const success = results.filter(item => item.ok).length;
+            const failed = results.length - success;
+            if (ctx.provider.addAccountLog) {
+                const detail = results.map(item => `${item.name}${item.ok ? '✓' : '✗'}`).join('、');
+                ctx.provider.addAccountLog(failed === 0 ? 'refresh_wx_credentials' : 'refresh_wx_credentials_failed', `续期微信授权：成功 ${success} 个，失败 ${failed} 个（${detail}）`, '', '');
+            }
+            res.json({
+                ok: failed === 0,
+                ...(failed > 0 ? { error: `${failed} 个账号续期失败` } : {}),
+                data: {
+                    total: results.length,
+                    success,
+                    failed,
+                    skipped: wxAccounts.length - targetAccounts.length,
+                    results,
+                },
+            });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    }
+    app.post('/api/accounts/refresh-wx-credentials', refreshWxCredentials);
+    app.post('/api/accounts/refresh-wx-codes', refreshWxCredentials);
+
+    // API: 单账号续期
+    app.post('/api/accounts/:id/refresh-wx-credential', async (req: Request, res: Response) => {
+        try {
+            const { refreshAccountCredential } = require('../../services/wx-credential');
+            const accountId = resolveAccId(ctx, req.params.id) || String(req.params.id || '');
+            const result = await refreshAccountCredential(accountId);
+            res.status(result.ok ? 200 : 400).json({
+                ok: result.ok,
+                ...(result.ok ? {} : { error: result.error || '续期失败' }),
+                data: result,
+            });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+
+    // API: 一键抓微信小程序 Code（本地 mitmproxy 抓包，阻断握手避免 Code 被消费）
+    const wxCodeCapture = require('../../services/wx-code-capture');
+    app.post('/api/wx-code/start', async (_req: Request, res: Response) => {
+        try {
+            const status = await wxCodeCapture.start();
+            if (status.phase === 'error') {
+                res.status(400).json({ ok: false, error: status.message, data: status });
+                return;
+            }
+            res.json({ ok: true, data: status });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+    app.get('/api/wx-code/status', (_req: Request, res: Response) => {
+        try {
+            res.json({ ok: true, data: wxCodeCapture.getStatus() });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+    app.post('/api/wx-code/cancel', (_req: Request, res: Response) => {
+        try {
+            res.json({ ok: true, data: wxCodeCapture.cancel() });
+        } catch (e: any) {
+            handleApiError(res, e);
+        }
+    });
+
     app.delete('/api/accounts/:id', (req: Request, res: Response) => {
         try {
             const resolvedId = resolveAccId(ctx, req.params.id) || String(req.params.id || '');
@@ -488,8 +582,8 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
 
     app.post('/api/settings/system-config', (req: Request, res: Response) => {
         try {
-            const { serverUrl, clientVersion, wxClientVersion, platform, os, timeZone, deviceInfo, autoCodeRefresh } = req.body || {};
-            const saved = store.setSystemConfig({ serverUrl, clientVersion, wxClientVersion, platform, os, timeZone, deviceInfo, autoCodeRefresh });
+            const { serverUrl, clientVersion, wxClientVersion, platform, os, timeZone, deviceInfo, autoCodeRefresh, autoStartAccounts } = req.body || {};
+            const saved = store.setSystemConfig({ serverUrl, clientVersion, wxClientVersion, platform, os, timeZone, deviceInfo, autoCodeRefresh, autoStartAccounts });
             updateRuntimeConfig(saved);
             // 保活配置改动后重新校准定时器，避免沿用旧的计时基准。
             if (autoCodeRefresh !== undefined) {

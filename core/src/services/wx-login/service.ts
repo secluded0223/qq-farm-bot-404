@@ -60,7 +60,37 @@ function storeCookies(cookies: Map<string, string>, headers: Headers): void {
     }
 }
 
+function isNetworkError(error: any): boolean {
+    const message = String(error?.message || '');
+    return error?.name === 'AbortError'
+        || /fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|network/i.test(message);
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 微信接口在部分网络下会间歇性断连（undici 抛裸的 fetch failed）。
+ * 只对幂等的 GET 重试，POST 重试可能造成重复提交，交由调用方决定。
+ */
 async function request(url: string, cookies: Map<string, string>, init: RequestInit = {}, timeout = 35_000): Promise<HttpResult> {
+    const method = String(init.method || 'GET').toUpperCase();
+    const attempts = method === 'GET' ? 2 : 1;
+    let lastError: any;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        try {
+            return await requestOnce(url, cookies, init, timeout);
+        } catch (error: any) {
+            lastError = error;
+            if (attempt >= attempts - 1 || !isNetworkError(error)) throw error;
+            await sleep(800);
+        }
+    }
+    throw lastError;
+}
+
+async function requestOnce(url: string, cookies: Map<string, string>, init: RequestInit = {}, timeout = 35_000): Promise<HttpResult> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
     try {
@@ -201,7 +231,12 @@ export class WxLoginService {
             fast_login: '1',
             self_redirect: 'true',
         });
-        const page = await request(`${QR_CONNECT_URL}?${params}`, cookies);
+        const page = await request(`${QR_CONNECT_URL}?${params}`, cookies).catch((error: any) => {
+            if (isNetworkError(error)) {
+                throw new Error(`无法连接微信服务器（${error?.message || '网络异常'}），请检查本机网络后重试`);
+            }
+            throw error;
+        });
         if (page.status < 200 || page.status >= 300) throw new Error(`Unable to create WeChat QR session (HTTP ${page.status})`);
         const uuid = /\/connect\/qrcode\/([^"'>\s]+)/.exec(page.body.toString('utf8'))?.[1];
         if (!uuid) throw new Error('Unable to parse the WeChat QR session');
@@ -213,7 +248,14 @@ export class WxLoginService {
     async poll(session: WxLoginSession): Promise<ScanStatus> {
         if (session.oauthCode) return 'authorized';
         const params = new URLSearchParams({ uuid: session.uuid, _: String(Date.now()) });
-        const response = await request(`${QR_POLL_URL}?${params}`, session.cookies, {}, 35_000);
+        let response: HttpResult;
+        try {
+            response = await request(`${QR_POLL_URL}?${params}`, session.cookies, {}, 35_000);
+        } catch (error: any) {
+            // 长轮询本身就会挂 25 秒，网络抖动不该让整个扫码流程判死；按「还没结果」继续等。
+            if (isNetworkError(error)) return 'waiting';
+            throw error;
+        }
         if (response.status < 200 || response.status >= 300) throw new Error(`WeChat QR polling failed (HTTP ${response.status})`);
         const body = response.body.toString('utf8');
         const errcode = /wx_errcode\s*=\s*(\d+)/.exec(body)?.[1];
