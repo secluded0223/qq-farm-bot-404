@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import dns from 'node:dns';
 import net from 'node:net';
 
 type Target = { ip: string; port: number };
@@ -96,7 +97,84 @@ function parseManual(body: Buffer, temp: any) {
 }
 function jsPlain(uin: bigint, appId: string, host: Buffer) { const mac = crypto.randomBytes(6); mac[0] = (mac[0] | 0x02) & 0xFE; const dev = U8(mac.toString('hex').match(/../g)!.join('-').toUpperCase()); const uin32 = BigInt.asUintN(32, uin); const info = (name: string) => Buffer.concat([pbl(1, U8('sessionkey')), pbv(2, uin32), pbl(3, dev), pbv(4, 1661404927), pbl(5, U8(name)), pbv(6, 0)]); const req = Buffer.concat([pbl(1, info('UnifiedPCWindows')), pbl(2, U8(appId)), pbv(4, 1), pbl(5, Buffer.alloc(0)), pbl(6, Buffer.alloc(0)), pbv(7, 1)]); return Buffer.concat([pbl(1, info('Windows')), pbl(2, U8('/cgi-bin/mmbiz-bin/js-login')), pbl(3, host), pbv(4, 5), pbl(5, req), pbl(6, U8(appId)), pbv(7, 1029), pbv(8, 1610627409), pbl(9, U8('WindowsxWebPlugin')), pbv(10, 573651281)]); }
 function envelope(s: Session, plain: Buffer) { const enc = layout(s.sendKey, lz4Literal(plain)); const head = wpkg({ 1: 1, 2: s.uin, 3: 0, 4: 0, 5: 524545, 6: 11, 7: 0, 8: 0, 9: 0, 10: 1, 11: 0, 12: 0, 13: 0, 17: 0, 18: 1, 20: 1504, 21: 0, 22: s.uin, 23: 0, 25: 16, 26: 4, 28: 1, 29: 1, 30: 0 }, { 14: Buffer.alloc(0), 24: s.deviceId, 27: s.f9 }); const inner = short(0x0B41, 0, Buffer.concat([head, enc])); const b = Buffer.concat([Buffer.alloc(2), TRANSFER_PATH, Buffer.alloc(2), TRANSFER_HOST, Buffer.alloc(4), inner]); b.writeUInt16BE(TRANSFER_PATH.length); b.writeUInt16BE(TRANSFER_HOST.length, 2 + TRANSFER_PATH.length); b.writeUInt32BE(inner.length, 4 + TRANSFER_PATH.length + TRANSFER_HOST.length); const n = Buffer.alloc(4); n.writeUInt32BE(b.length); return Buffer.concat([n, b]); }
-async function targets(kind: 'long' | 'short') { const r = await fetch('http://aedns.weixin.qq.com/cgi-bin/default/getdns?clientversion=0&devicetype=Windows&uin=0&format=json', { headers: { 'User-Agent': 'MicroMessenger Client' } }); const d: any = await r.json(); const item = d?.dns?.domainlist?.find((x: any) => x.name === (kind === 'long' ? 'longcloud.weixin.com' : 'shortcloud.weixin.com')); const proto = kind === 'long' ? 'mmtlsovertcp' : 'http'; const ports = item?.protocollist?.find((x: any) => x.name === proto)?.portlist || []; const ips = (item?.iplist || []).map((x: any) => x.ip); const out = ips.flatMap((ip: string) => ports.map((port: number) => ({ ip, port }))); return out.length ? out : [{ ip: kind === 'long' ? '180.153.202.85' : '120.241.131.173', port: kind === 'long' ? 8080 : 80 }]; }
+type Kind = 'long' | 'short';
+const DNS_HOST: Record<Kind, { host: string, port: number, proto: string }> = {
+    long: { host: 'longcloud.weixin.com', port: 8080, proto: 'mmtlsovertcp' },
+    short: { host: 'shortcloud.weixin.com', port: 80, proto: 'http' },
+};
+// 实测可用的静态节点，作为 HTTPDNS 与系统 DNS 都失败时的最后兜底。
+const STATIC_TARGETS: Record<Kind, Target[]> = {
+    long: [{ ip: '180.153.202.85', port: 8080 }],
+    short: [{ ip: '140.207.120.146', port: 80 }],
+};
+const TARGET_CACHE_TTL = 10 * 60 * 1000;
+const HTTPDNS_RETRY_AFTER_FAILURE = 5 * 60 * 1000;
+const targetCache = new Map<Kind, { at: number, list: Target[] }>();
+let httpDnsUnavailableUntil = 0;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+        promise.then(
+            value => { clearTimeout(timer); resolve(value); },
+            error => { clearTimeout(timer); reject(error); },
+        );
+    });
+}
+
+async function httpDnsTargets(kind: Kind): Promise<Target[]> {
+    // 上一次探测失败后短时间内不再等待，避免每次取码都白等一个超时。
+    if (Date.now() < httpDnsUnavailableUntil) throw new Error('httpdns temporarily unavailable');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    try {
+        const response = await fetch('http://aedns.weixin.qq.com/cgi-bin/default/getdns?clientversion=0&devicetype=Windows&uin=0&format=json', { headers: { 'User-Agent': 'MicroMessenger Client' }, signal: controller.signal });
+        const payload: any = await response.json();
+        const meta = DNS_HOST[kind];
+        const item = payload?.dns?.domainlist?.find((entry: any) => entry.name === meta.host);
+        const ports = item?.protocollist?.find((entry: any) => entry.name === meta.proto)?.portlist || [];
+        const ips = (item?.iplist || []).map((entry: any) => entry.ip);
+        return ips.flatMap((ip: string) => ports.map((port: number) => ({ ip, port })));
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function systemDnsTargets(kind: Kind): Promise<Target[]> {
+    const meta = DNS_HOST[kind];
+    try {
+        const ips = await withTimeout(dns.promises.resolve4(meta.host), 3000, 'system dns');
+        return ips.map(ip => ({ ip, port: meta.port }));
+    } catch {
+        return [];
+    }
+}
+
+async function targets(kind: Kind): Promise<Target[]> {
+    const cached = targetCache.get(kind);
+    if (cached && Date.now() - cached.at < TARGET_CACHE_TTL) return cached.list;
+    // HTTPDNS 在国内网络下经常超时/被拦，失败必须落到本地 DNS，而不是把 fetch failed 抛出去。
+    let remote: Target[] = [];
+    try {
+        remote = await httpDnsTargets(kind);
+    } catch {
+        httpDnsUnavailableUntil = Date.now() + HTTPDNS_RETRY_AFTER_FAILURE;
+    }
+    if (!remote.length) httpDnsUnavailableUntil = Date.now() + HTTPDNS_RETRY_AFTER_FAILURE;
+    // 静态节点优先尝试：本地 DNS 给出的部分节点端口不通，先试确定可用的能少绕几圈。
+    const local = await systemDnsTargets(kind);
+    const merged: Target[] = [];
+    const seen = new Set<string>();
+    for (const target of [...STATIC_TARGETS[kind], ...remote, ...local]) {
+        const key = `${target.ip}:${target.port}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push(target);
+    }
+    if (!merged.length) return STATIC_TARGETS[kind];
+    targetCache.set(kind, { at: Date.now(), list: merged });
+    return merged;
+}
 
 export async function getNativeWxLoginCode(loginBuffer: string, appId: string): Promise<string> {
     const { req, device, host } = manualRequest(loginBuffer, crypto.randomBytes(32));

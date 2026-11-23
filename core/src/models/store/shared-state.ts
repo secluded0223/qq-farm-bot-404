@@ -1,7 +1,7 @@
 import type { AccountConfig, AutomationConfig, BagSeedFallbackStrategy, FertilizerLandType, FertilizerMode, GlobalConfig, IntervalConfig, LoginSettings, OfflineReminder, PlantingStrategy, QuietHoursConfig } from '../../types/config';
 export {};
 
-const { DEFAULT_TIME_ZONE, normalizeTimeZone, resolveClientVersion } = require('../../config/config');
+const { DEFAULT_TIME_ZONE, normalizeTimeZone, resolveClientVersion, normalizeAutoCodeRefresh } = require('../../config/config');
 const { getDataFile, ensureDataDir } = require('../../config/runtime-paths');
 const { createConfigStorage } = require('./config-storage');
 const { storageError } = require('../../services/json-db');
@@ -624,6 +624,9 @@ function loadGlobalConfig(): void {
                         deviceId: String(srcDevice.deviceId || 'DESKTOP-PC<WPC>').trim(),
                         userAgent: String(srcDevice.userAgent || '').trim(),
                     },
+                    // 这两个字段是运行期配置，必须在加载时保留，否则每次重启都会掉回默认值。
+                    autoCodeRefresh: normalizeAutoCodeRefresh(data.systemConfig.autoCodeRefresh),
+                    autoStartAccounts: data.systemConfig.autoStartAccounts !== false,
                 };
                 systemConfigMigrated = savedTopVersion !== deviceClientVersion
                     || savedDeviceVersion !== deviceClientVersion
