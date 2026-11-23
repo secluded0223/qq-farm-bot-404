@@ -16,6 +16,13 @@ interface DevicePreset {
     deviceInfo: DeviceInfo;
 }
 
+interface AutoCodeRefreshConfig {
+    enabled: boolean;
+    intervalMinutes: number;
+    offlineEnabled: boolean;
+    offlineDelaySeconds: number;
+}
+
 interface SystemConfig {
     serverUrl: string;
     clientVersion: string;
@@ -26,6 +33,8 @@ interface SystemConfig {
     os: string;
     timeZone: string;
     deviceInfo: DeviceInfo;
+    /** 账号保活：定时重登与掉线重登，只对具备微信刷新凭证的账号生效。 */
+    autoCodeRefresh?: AutoCodeRefreshConfig;
 }
 
 interface RuntimeConfig extends SystemConfig {
@@ -191,6 +200,26 @@ const DEVICE_PRESETS: DevicePreset[] = [
 
 const DEFAULT_DEVICE_INFO: DeviceInfo = { ...DEVICE_PRESETS[0].deviceInfo, clientVersion: DEFAULT_CLIENT_VERSION };
 
+const DEFAULT_AUTO_CODE_REFRESH: AutoCodeRefreshConfig = {
+    enabled: false,
+    intervalMinutes: 60,
+    offlineEnabled: false,
+    offlineDelaySeconds: 60,
+};
+
+function normalizeAutoCodeRefresh(input: any): AutoCodeRefreshConfig {
+    const src = (input && typeof input === 'object') ? input : {};
+    const interval = Number(src.intervalMinutes);
+    const delay = Number(src.offlineDelaySeconds);
+    return {
+        enabled: src.enabled === true,
+        // 只开掉线重登时也要保留一个可用的间隔值，避免保存后回到默认。
+        intervalMinutes: Number.isFinite(interval) ? Math.max(1, Math.min(1440, Math.round(interval))) : 60,
+        offlineEnabled: src.offlineEnabled === true,
+        offlineDelaySeconds: Number.isFinite(delay) ? Math.max(1, Math.min(86400, Math.round(delay))) : 60,
+    };
+}
+
 const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
     serverUrl: 'wss://gate-obt.nqf.qq.com/prod/ws',
     clientVersion: DEFAULT_CLIENT_VERSION,
@@ -201,6 +230,7 @@ const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
     os: DEFAULT_DEVICE_INFO.os,
     timeZone: DEFAULT_TIME_ZONE,
     deviceInfo: { ...DEFAULT_DEVICE_INFO },
+    autoCodeRefresh: { ...DEFAULT_AUTO_CODE_REFRESH },
 };
 
 const CONFIG: RuntimeConfig = {
@@ -213,6 +243,7 @@ const CONFIG: RuntimeConfig = {
     os: DEFAULT_SYSTEM_CONFIG.os,
     timeZone: DEFAULT_SYSTEM_CONFIG.timeZone,
     deviceInfo: { ...DEFAULT_DEVICE_INFO },
+    autoCodeRefresh: { ...DEFAULT_AUTO_CODE_REFRESH },
     heartbeatInterval: 25000,
     farmCheckInterval: 3000,
     friendCheckInterval: 12000,
@@ -267,6 +298,9 @@ function updateRuntimeConfig(newConfig: Partial<SystemConfig>): void {
     if (newConfig.timeZone !== undefined) {
         CONFIG.timeZone = normalizeTimeZone(newConfig.timeZone);
     }
+    if (newConfig.autoCodeRefresh !== undefined) {
+        CONFIG.autoCodeRefresh = normalizeAutoCodeRefresh(newConfig.autoCodeRefresh);
+    }
     if (newConfig.deviceInfo) {
         CONFIG.deviceInfo = normalizeDeviceInfo(newConfig.deviceInfo);
         // 同步 os 与 clientVersion 到顶层
@@ -286,11 +320,16 @@ function getRuntimeConfig(): SystemConfig {
         os: CONFIG.os,
         timeZone: CONFIG.timeZone,
         deviceInfo: { ...CONFIG.deviceInfo },
+        autoCodeRefresh: { ...CONFIG.autoCodeRefresh },
     };
 }
 
 function getDefaultSystemConfig(): SystemConfig {
-    return { ...DEFAULT_SYSTEM_CONFIG, deviceInfo: { ...DEFAULT_DEVICE_INFO } };
+    return {
+        ...DEFAULT_SYSTEM_CONFIG,
+        deviceInfo: { ...DEFAULT_DEVICE_INFO },
+        autoCodeRefresh: { ...DEFAULT_AUTO_CODE_REFRESH },
+    };
 }
 
 function getDevicePresets(): DevicePreset[] {
@@ -335,5 +374,7 @@ module.exports = {
     normalizeTimeZone,
     resolveClientVersion,
     resolveClientVersionUpdatedAt,
+    normalizeAutoCodeRefresh,
+    DEFAULT_AUTO_CODE_REFRESH,
     DEVICE_PRESETS,
 };

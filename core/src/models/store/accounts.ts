@@ -66,8 +66,30 @@ function normalizeAccount(raw: any): Account {
     };
     const nick = String(source.nick || '').trim();
     if (nick) account.nick = nick;
+    const wxid = String(source.wxid || '').trim();
+    if (wxid) account.wxid = wxid;
+    // 微信续期凭证：缺失时留空，续期逻辑会按“需要重新扫码”处理。
+    const refreshtoken = String(source.refreshtoken || '').trim();
+    if (refreshtoken) account.refreshtoken = refreshtoken;
+    const accesstoken = String(source.accesstoken || '').trim();
+    if (accesstoken) account.accesstoken = accesstoken;
+    const loginBuffer = String(source.loginBuffer || '').trim();
+    if (loginBuffer) account.loginBuffer = loginBuffer;
+    for (const key of ['expires_in', 'expires_at', 'wxCredentialRefreshedAt', 'wxCredentialLastAttemptAt'] as const) {
+        const value = Number(source[key]);
+        if (Number.isFinite(value) && value > 0) account[key] = value;
+    }
+    const refreshError = String(source.wxCredentialRefreshError || '').trim();
+    if (refreshError) account.wxCredentialRefreshError = refreshError;
     return account;
 }
+
+/** 账号里需要原样透传写入的凭证/续期状态字段。 */
+const CREDENTIAL_KEYS = [
+    'refreshtoken', 'accesstoken', 'loginBuffer',
+    'expires_in', 'expires_at',
+    'wxCredentialRefreshedAt', 'wxCredentialLastAttemptAt', 'wxCredentialRefreshError',
+] as const;
 
 function addOrUpdateAccount(acc: Partial<Account> & { avatarUrl?: string }): AccountsData {
     const { ensureAccountConfig } = require('./account-config');
@@ -75,7 +97,7 @@ function addOrUpdateAccount(acc: Partial<Account> & { avatarUrl?: string }): Acc
     let touchedAccountId = '';
     const source: any = acc || {};
     const cleanAccount: any = {};
-    for (const key of ['id', 'name', 'code', 'platform', 'uin', 'qq', 'avatar', 'avatarUrl', 'nick']) {
+    for (const key of ['id', 'name', 'code', 'platform', 'uin', 'qq', 'avatar', 'avatarUrl', 'nick', 'wxid', ...CREDENTIAL_KEYS]) {
         if (source[key] !== undefined) cleanAccount[key] = source[key];
     }
     acc = cleanAccount;
@@ -88,7 +110,7 @@ function addOrUpdateAccount(acc: Partial<Account> & { avatarUrl?: string }): Acc
     } else {
         const id = data.nextId++;
         touchedAccountId = String(id);
-        data.accounts.push({
+        const created: any = {
             id: touchedAccountId,
             name: acc.name || `账号${id}`,
             code: acc.code || '',
@@ -98,7 +120,12 @@ function addOrUpdateAccount(acc: Partial<Account> & { avatarUrl?: string }): Acc
             avatar: acc.avatar || acc.avatarUrl || '',
             createdAt: Date.now(),
             updatedAt: Date.now(),
-        });
+        };
+        for (const key of CREDENTIAL_KEYS) {
+            if (acc[key] !== undefined) created[key] = acc[key];
+        }
+        if (acc.wxid !== undefined) created.wxid = acc.wxid;
+        data.accounts.push(created);
     }
     if (touchedAccountId) {
         ensureAccountConfig(touchedAccountId);

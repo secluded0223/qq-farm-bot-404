@@ -533,11 +533,12 @@ function mountFarmRoutes(app: Application, ctx: AdminContext): void {
     });
 
     // API: 启动账号
-    app.post('/api/accounts/:id/start', (req: Request, res: Response) => {
+    app.post('/api/accounts/:id/start', async (req: Request, res: Response) => {
         try {
             const accountId = resolveAccId(ctx, req.params.id);
 
-            const ok = ctx.provider.startAccount(accountId);
+            // 启动前会先尝试换取新鲜 Code，因此这里是异步的。
+            const ok = await ctx.provider.startAccount(accountId);
             if (!ok) {
                 return res.status(404).json({ ok: false, error: 'Account not found' });
             }

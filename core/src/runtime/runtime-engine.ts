@@ -9,6 +9,7 @@ const { createDataProvider } = require('./data-provider');
 const { createReloginReminderService } = require('./relogin-reminder');
 const { createRuntimeState } = require('./runtime-state');
 const { createWorkerManager } = require('./worker-manager');
+const { startWxKeepAlive, stopWxKeepAlive, notifyAccountOffline, applyWxKeepAliveConfig } = require('../services/wx-keepalive');
 
 const OPERATION_KEYS = ['harvest', 'farming', 'fertilize', 'plant', 'steal', 'helpFarming', 'taskClaim', 'sell', 'upgrade'];
 
@@ -92,6 +93,10 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
             runtimeEvents.emit('worker_log', { entry, accountId, accountName });
             if (onLog) onLog(entry, accountId, accountName);
         },
+        // 掉线统一交给保活模块判断是否自动续期重登。
+        onAccountOffline: (accountId: string, _accountName: string, reason: string) => {
+            notifyAccountOffline(accountId, reason);
+        },
     });
     const dataProvider = createDataProvider({
         workers,
@@ -143,14 +148,31 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
         }
     }
 
-    function startAllAccounts(): void {
+    async function startAllAccounts(): Promise<void> {
         const accounts = (store.getAccounts().accounts || []);
-        if (accounts.length > 0) {
-            log('系统', `发现 ${accounts.length} 个账号，正在启动...`);
-            accounts.forEach((acc: any) => startWorker(acc));
-        } else {
+        if (accounts.length === 0) {
             log('系统', '未发现账号，请访问管理面板添加账号');
+            return;
         }
+        log('系统', `发现 ${accounts.length} 个账号，正在启动...`);
+        // 串行启动：每个账号先换新鲜 Code 再连线，避免并发把一次性 Code 打乱。
+        for (const acc of accounts) {
+            try {
+                await dataProvider.startAccount(String(acc.id));
+            } catch (error: any) {
+                log('错误', `账号 ${acc.name} 启动异常: ${error?.message || error}`, { accountId: String(acc.id), accountName: acc.name });
+                startWorker(acc);
+            }
+        }
+    }
+
+    function startAccountKeepAlive(): void {
+        startWxKeepAlive({
+            restartWorker: (account: any) => restartWorker(account),
+            isAccountRunning: (accountId: string) => !!workers[String(accountId)],
+            log,
+            addAccountLog,
+        });
     }
 
     async function start(options: { startAdminServer?: boolean; autoStartAccounts?: boolean } = {}): Promise<void> {
@@ -168,11 +190,15 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
         }
 
         if (shouldAutoStartAccounts) {
-            startAllAccounts();
+            await startAllAccounts();
         }
+
+        // 保活定时器与账号启动解耦：即使此刻没有运行账号，也要能接住后续的掉线重登。
+        startAccountKeepAlive();
     }
 
     function stopAllAccounts(): void {
+        stopWxKeepAlive();
         for (const accountId of Object.keys(workers)) {
             stopWorker(accountId);
         }
@@ -194,6 +220,7 @@ function createRuntimeEngine(options: RuntimeEngineOptions = {}) {
         callWorkerApi,
         log,
         addAccountLog,
+        applyAccountKeepAliveConfig: applyWxKeepAliveConfig,
     };
 }
 

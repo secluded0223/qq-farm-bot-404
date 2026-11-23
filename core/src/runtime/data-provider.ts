@@ -59,6 +59,40 @@ function createDataProvider(options: DataProviderOptions) {
         return findAccountByRef(getStoredAccountsList(), accountRef);
     }
 
+    /**
+     * 启动前换新鲜 Code。
+     *
+     * 游戏 Code 是一次性的，账号停止后旧值大概率已被消费，直接启动会被网关拒；
+     * 微信账号先用 loginBuffer / refreshtoken 换新 Code，QQ 账号尽力免扫码重签，
+     * 两者失败都只记日志并回退到已保存的 Code，不阻断启动。
+     */
+    async function refreshCodeBeforeStart(account: any, accountId: string): Promise<void> {
+        const platform = String(account?.platform || '');
+        const name = String(account?.name || accountId);
+        if (!accountId) return;
+        try {
+            if (platform === 'wx') {
+                const { ensureFreshGameCode } = require('../services/wx-credential');
+                const result = await ensureFreshGameCode(accountId);
+                if (result.ok) {
+                    addAccountLog('auto_code_refresh', `账号 ${result.accountName} 启动前已自动续期 Code`, accountId, result.accountName, { reason: 'manual_start' });
+                } else {
+                    addAccountLog('auto_code_refresh_failed', `账号 ${name} 启动前续期 Code 失败: ${result.error || '未知原因'}，尝试用现有 Code 启动`, accountId, name, { reason: 'manual_start' });
+                }
+            } else if (platform === 'qq') {
+                const { tryRefreshQqGameCode } = require('../services/qq-credential');
+                const result = await tryRefreshQqGameCode(accountId);
+                if (result.ok) {
+                    addAccountLog('auto_code_refresh', `账号 ${name} 启动前已自动重签 QQ Code`, accountId, name, { reason: 'manual_start' });
+                } else {
+                    addAccountLog('auto_code_refresh_failed', `账号 ${name} 未能自动重签 QQ Code（${result.error || '未知原因'}），将用已保存的 Code 启动；若提示 Code 失效请重新扫码或填写新 Code`, accountId, name, { reason: 'manual_start' });
+                }
+            }
+        } catch (error: any) {
+            addAccountLog('auto_code_refresh_failed', `账号 ${name} 启动前续期 Code 异常: ${error?.message || error}，尝试用现有 Code 启动`, accountId, name, { reason: 'manual_start' });
+        }
+    }
+
     return {
         resolveAccountId: (accountRef: string) => resolveAccountRefId(accountRef),
 
@@ -426,11 +460,13 @@ function createDataProvider(options: DataProviderOptions) {
             return data;
         },
 
-        startAccount: (accountRef: string) => {
+        startAccount: async (accountRef: string) => {
             const accountId = resolveAccountRefId(accountRef);
             const acc = findAccountByAnyRef(accountId || accountRef);
             if (!acc) return false;
-            startWorker(acc);
+            await refreshCodeBeforeStart(acc, String(accountId || acc.id || ''));
+            const latest = findAccountByAnyRef(accountId || accountRef) || acc;
+            startWorker(latest);
             return true;
         },
 

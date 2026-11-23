@@ -133,6 +133,13 @@ export interface DeviceInfo {
   userAgent: string;
 }
 
+export interface AutoCodeRefreshConfig {
+  enabled: boolean;
+  intervalMinutes: number;
+  offlineEnabled: boolean;
+  offlineDelaySeconds: number;
+}
+
 export interface SystemConfig {
   serverUrl: string;
   clientVersion: string;
@@ -143,6 +150,8 @@ export interface SystemConfig {
   os: string;
   timeZone: string;
   deviceInfo: DeviceInfo;
+  /** 账号保活：定时重登与掉线重登。 */
+  autoCodeRefresh?: AutoCodeRefreshConfig;
 }
 
 export interface GlobalConfig {

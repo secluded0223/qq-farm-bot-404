@@ -1,15 +1,31 @@
 import { ref } from 'vue'
 import api from '@/api'
 
+export interface AutoCodeRefreshConfig {
+  enabled: boolean
+  intervalMinutes: number
+  offlineEnabled: boolean
+  offlineDelaySeconds: number
+}
+
 export interface SystemConfig {
   serverUrl: string
   clientVersion: string
   platform: string
   os: string
+  /** 账号保活：定时重登与掉线重登，只对具备微信刷新凭证的账号生效。 */
+  autoCodeRefresh?: AutoCodeRefreshConfig
 }
 
 interface UseAdminSystemConfigOptions {
   showAlert: (message: string, type?: 'primary' | 'danger') => void
+}
+
+export const defaultAutoCodeRefresh: AutoCodeRefreshConfig = {
+  enabled: false,
+  intervalMinutes: 60,
+  offlineEnabled: false,
+  offlineDelaySeconds: 60,
 }
 
 const defaultSystemConfigValues: SystemConfig = {
@@ -17,6 +33,7 @@ const defaultSystemConfigValues: SystemConfig = {
   clientVersion: '1.13.0.5_20260723',
   platform: 'qq',
   os: 'iOS',
+  autoCodeRefresh: { ...defaultAutoCodeRefresh },
 }
 
 export function useAdminSystemConfig(options: UseAdminSystemConfigOptions) {

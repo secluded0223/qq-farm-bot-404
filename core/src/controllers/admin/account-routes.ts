@@ -19,6 +19,33 @@ const {
     resolveAccId,
 } = require('./middleware');
 
+/**
+ * 微信扫码流程里，后端在签发 Code 时暂存了滚动凭证。
+ * 账号提交时按 uin(openid) 取回并挂到账号上，后续启动/保活才有东西可续。
+ */
+function attachScanCredential(body: any): any {
+    const payload = body && typeof body === 'object' ? body : {};
+    if (String(payload.platform || '') !== 'wx') return payload;
+    if (!String(payload.code || '').trim()) return payload;
+    const ref = payload.uin || payload.qq || payload.wxid || payload.openid;
+    if (!ref) return payload;
+    try {
+        const { takeScanCredential } = require('../../services/wx-credential');
+        const credential = takeScanCredential(ref);
+        if (!credential) return payload;
+        return {
+            ...payload,
+            refreshtoken: credential.refreshtoken,
+            accesstoken: credential.accesstoken,
+            loginBuffer: credential.loginBuffer,
+            expires_in: credential.expires_in,
+            expires_at: credential.expires_at,
+        };
+    } catch {
+        return payload;
+    }
+}
+
 function mountAccountRoutes(app: Application, ctx: AdminContext): void {
 
     // API: 账号管理
@@ -78,7 +105,10 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
             const isUpdate = !!updateRef;
 
             const resolvedUpdateId = isUpdate ? resolveAccId(ctx, updateRef) : '';
-            const payload = isUpdate ? { ...body, id: resolvedUpdateId || String(updateRef) } : body;
+            const basePayload = isUpdate ? { ...body, id: resolvedUpdateId || String(updateRef) } : body;
+            // 扫码时后端暂存了 refreshtoken 等续期凭证；账号真正入库时挂上去，之后才能自动续签。
+            // 只在带 code 的登录动作里挂，避免单纯改备注时多出字段。
+            const payload = attachScanCredential(basePayload);
             let wasRunning = false;
             if (isUpdate && ctx.provider.isAccountRunning) {
                 wasRunning = ctx.provider.isAccountRunning(payload.id);
@@ -115,7 +145,7 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
             // 如果是新增，自动启动
             if (!isUpdate) {
                 const newAcc = data.accounts.at(-1);
-                if (newAcc) ctx.provider.startAccount(newAcc.id);
+                if (newAcc) void Promise.resolve(ctx.provider.startAccount(newAcc.id)).catch(() => {});
             } else if (isRemarkRelogin) {
                 // Adding with an existing remark is a relogin operation, including for stopped accounts.
                 ctx.provider.restartAccount(payload.id);
@@ -458,9 +488,14 @@ function mountAccountRoutes(app: Application, ctx: AdminContext): void {
 
     app.post('/api/settings/system-config', (req: Request, res: Response) => {
         try {
-            const { serverUrl, clientVersion, wxClientVersion, platform, os, timeZone, deviceInfo } = req.body || {};
-            const saved = store.setSystemConfig({ serverUrl, clientVersion, wxClientVersion, platform, os, timeZone, deviceInfo });
+            const { serverUrl, clientVersion, wxClientVersion, platform, os, timeZone, deviceInfo, autoCodeRefresh } = req.body || {};
+            const saved = store.setSystemConfig({ serverUrl, clientVersion, wxClientVersion, platform, os, timeZone, deviceInfo, autoCodeRefresh });
             updateRuntimeConfig(saved);
+            // 保活配置改动后重新校准定时器，避免沿用旧的计时基准。
+            if (autoCodeRefresh !== undefined) {
+                const { applyWxKeepAliveConfig } = require('../../services/wx-keepalive');
+                applyWxKeepAliveConfig();
+            }
             if (ctx.provider && typeof ctx.provider.broadcastConfig === 'function') {
                 ctx.provider.broadcastConfig('');
             }

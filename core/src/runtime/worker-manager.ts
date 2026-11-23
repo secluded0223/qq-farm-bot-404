@@ -34,6 +34,8 @@ interface WorkerManagerOptions {
     deleteAccount: (id: string) => void;
     onStatusSync?: (accountId: string, status: any, accountName?: string) => void;
     onWorkerLog?: (entry: any, accountId: string, accountName?: string) => void;
+    /** 账号因断开/被踢而停止时回调，供保活模块安排续期重登。 */
+    onAccountOffline?: (accountId: string, accountName: string, reason: string) => void;
 }
 
 function createWorkerManager(options: WorkerManagerOptions) {
@@ -417,6 +419,12 @@ function createWorkerManager(options: WorkerManagerOptions) {
                 { source, disconnectCode: code, reason, phase, connectionId: Number(msg.connectionId) || 0, diagnostics: msg.diagnostics || null },
             );
             stopWorker(accountId);
+            // 掉线后交给保活模块判断是否自动续期重登（只对具备微信刷新凭证的账号生效）。
+            try {
+                if (typeof (options as any).onAccountOffline === 'function') {
+                    (options as any).onAccountOffline(String(accountId), worker.name, `disconnect:${source}:${phase}:${code}`);
+                }
+            } catch {}
         } else if (msg.type === 'api_response') {
             const { id, result, error } = msg;
             managerScheduler.clear(`api_timeout_${accountId}_${id}`);

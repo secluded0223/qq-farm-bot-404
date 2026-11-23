@@ -7,6 +7,7 @@ import type { ScanStatus, WxLoginSession } from '../../services/wx-login/service
 export { };
 
 const { createAuthRequired } = require('./middleware');
+const { rememberScanCredential } = require('../../services/wx-credential');
 
 const TARGET_APP_ID = 'wx5306c5978fdb76e4';
 const TASK_TTL_MS = 110_000;
@@ -34,7 +35,7 @@ async function confirm(task: Task): Promise<void> {
     await wxLogin.confirm(task.session);
     task.status = 'ready_for_code';
 }
-async function consumeCode(task: Task): Promise<void> { if (task.status !== 'ready_for_code') throw new Error('Login code is not ready'); task.code = await wxLogin.issueCode(task.session, TARGET_APP_ID); }
+async function consumeCode(task: Task): Promise<void> { if (task.status !== 'ready_for_code') throw new Error('Login code is not ready'); task.code = await wxLogin.issueCode(task.session, TARGET_APP_ID); rememberScanCredential(task.session.openid || '', { openid: task.session.openid || '', refreshtoken: task.session.refreshtoken || '', accesstoken: task.session.accesstoken || '', loginBuffer: task.session.loginBuffer, expires_in: task.session.expires_in, expires_at: task.session.expires_at }); }
 
 function mountWxLoginRoutes(app: Application, ctx: AdminContext): void {
     app.use('/api/wx-login', createAuthRequired(ctx));

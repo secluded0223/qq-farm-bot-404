@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { SystemConfig } from '@/composables/useAdminSystemConfig'
+import { computed, watch } from 'vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
+import BaseSwitch from '@/components/ui/BaseSwitch.vue'
+import { defaultAutoCodeRefresh } from '@/composables/useAdminSystemConfig'
 
 interface OptionItem {
   label: string
@@ -26,6 +29,14 @@ defineEmits<{
 }>()
 
 const localSystemConfig = defineModel<SystemConfig>('localSystemConfig', { required: true })
+
+// 老配置里没有保活字段，补一份默认值，避免开关读到 undefined。
+watch(localSystemConfig, (config) => {
+  if (config && !config.autoCodeRefresh)
+    config.autoCodeRefresh = { ...defaultAutoCodeRefresh }
+}, { immediate: true })
+
+const autoCodeRefresh = computed(() => localSystemConfig.value.autoCodeRefresh ?? { ...defaultAutoCodeRefresh })
 </script>
 
 <template>
@@ -149,6 +160,65 @@ const localSystemConfig = defineModel<SystemConfig>('localSystemConfig', { requi
           >
             保存
           </BaseButton>
+        </div>
+      </div>
+    </div>
+
+    <!-- 账号保活：定时重登 / 掉线重登 -->
+    <div class="border border-gray-200 rounded-lg bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <h4 class="mb-1 flex items-center gap-2 text-base text-gray-900 font-bold dark:text-gray-100">
+        <div class="i-carbon-renew" />
+        账号续签与保活
+      </h4>
+      <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        仅对扫码时拿到微信刷新凭证（refreshtoken）的账号生效；没有凭证的账号只能重新扫码。
+      </p>
+
+      <div class="space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2.5 dark:bg-gray-900/40">
+          <div class="min-w-0">
+            <div class="text-sm text-gray-800 font-medium dark:text-gray-200">
+              定时重登
+            </div>
+            <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              每隔固定分钟数续期一次微信授权，并用新 Code 重启账号。
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <BaseInput
+              v-model="autoCodeRefresh.intervalMinutes"
+              type="number"
+              min="1"
+              max="1440"
+              class="w-24"
+              :disabled="!autoCodeRefresh.enabled"
+            />
+            <span class="text-xs text-gray-500 dark:text-gray-400">分钟</span>
+            <BaseSwitch v-model="autoCodeRefresh.enabled" />
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2.5 dark:bg-gray-900/40">
+          <div class="min-w-0">
+            <div class="text-sm text-gray-800 font-medium dark:text-gray-200">
+              掉线重登
+            </div>
+            <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              账号断开或被踢下线后，等待指定秒数自动续期并重新启动。
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <BaseInput
+              v-model="autoCodeRefresh.offlineDelaySeconds"
+              type="number"
+              min="1"
+              max="86400"
+              class="w-24"
+              :disabled="!autoCodeRefresh.offlineEnabled"
+            />
+            <span class="text-xs text-gray-500 dark:text-gray-400">秒</span>
+            <BaseSwitch v-model="autoCodeRefresh.offlineEnabled" />
+          </div>
         </div>
       </div>
     </div>

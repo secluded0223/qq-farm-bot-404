@@ -1,7 +1,7 @@
 import type { GlobalConfig, LoginSettings, OfflineReminder, SystemConfig, UIConfig } from '../../types/config';
 export {};
 
-const { DEFAULT_CLIENT_VERSION, DEFAULT_WX_CLIENT_VERSION, DEFAULT_TIME_ZONE, normalizeTimeZone, resolveClientVersionUpdatedAt } = require('../../config/config');
+const { DEFAULT_CLIENT_VERSION, DEFAULT_WX_CLIENT_VERSION, DEFAULT_TIME_ZONE, normalizeTimeZone, normalizeAutoCodeRefresh, resolveClientVersionUpdatedAt } = require('../../config/config');
 
 const sharedState = require('./shared-state');
 
@@ -172,6 +172,10 @@ function setSystemConfig(config: Partial<SystemConfig> | undefined): SystemConfi
         os: deviceInfo.os,
         timeZone: normalizeTimeZone(config.timeZone || current?.timeZone || DEFAULT_TIME_ZONE),
         deviceInfo,
+        // 账号保活配置与运行环境配置同存一处；未传时沿用已保存值，避免被清空。
+        autoCodeRefresh: normalizeAutoCodeRefresh(
+            config.autoCodeRefresh !== undefined ? config.autoCodeRefresh : current?.autoCodeRefresh,
+        ),
     };
     saveGlobalConfig({ systemConfig: next });
     return { ...globalConfig.systemConfig };
