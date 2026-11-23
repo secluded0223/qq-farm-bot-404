@@ -219,6 +219,13 @@ function getStatus(): CaptureStatus {
 
 async function start(): Promise<CaptureStatus> {
     if (state.phase === 'running' || starting) return getStatus();
+    // 依赖系统代理注册表与 WeChatAppEx 进程，只在 Windows 上有意义。
+    if (process.platform !== 'win32') {
+        state.phase = 'error';
+        state.message = '一键抓 Code 仅支持 Windows（需要修改系统代理并重启微信小程序进程）';
+        state.finishedAt = Date.now();
+        return getStatus();
+    }
     starting = true;
     cleanup();
     mitmStderr = '';

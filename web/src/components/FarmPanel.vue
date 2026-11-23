@@ -179,10 +179,10 @@ async function runRipenAll() {
     return
   ripenRunning.value = true
   ripenError.value = ''
+  let isDone = false
   try {
     let cursor = 0
     const token = ripenPreview.value.token
-    let isDone = false
     for (let guard = 0; guard < 200; guard++) {
       const { data } = await api.post('/api/farm/ripen-all/step', { token, cursor }, { timeout: 90000 } as any)
       if (!data?.ok)
@@ -203,16 +203,20 @@ async function runRipenAll() {
         break
       }
     }
-    if (isDone) {
+    // 循环跑满仍没拿到 done/stopped 说明计划没走完，给出明确提示而不是静默停住。
+    if (!isDone && !ripenError.value)
+      ripenError.value = '未能在限定轮次内完成，请刷新土地后重新预览'
+    if (isDone)
       toast.success(`催熟完成：${ripenProgress.value.completed} 块土地已成熟`)
-      closeRipen()
-    }
   }
   catch (error: any) {
     ripenError.value = error.response?.data?.error || error.message || '催熟执行失败'
   }
   finally {
     ripenRunning.value = false
+    // 关闭动作必须放在 finally：closeRipen 在 running 时是空操作。
+    if (isDone)
+      closeRipen()
   }
 }
 
@@ -480,18 +484,19 @@ onUnmounted(() => {
             <span class="font-medium">{{ ripenPreview.actionCount }} 批 · {{ ripenPreview.applicationCount }} 次</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-gray-500 dark:text-gray-400">普通化肥 需 / 存</span>
-            <span class="font-medium" :class="ripenPreview.cost.normal > ripenPreview.inventory.normal ? 'text-red-600 dark:text-red-400' : ''">
-              {{ ripenPreview.cost.normal }} / {{ ripenPreview.inventory.normal }}
-            </span>
+            <span class="text-gray-500 dark:text-gray-400">预计消耗（按阶段折算）</span>
+            <span class="font-medium">普通 {{ ripenPreview.cost.normal }}s · 有机 {{ ripenPreview.cost.organic }}s</span>
           </div>
           <div class="flex justify-between">
-            <span class="text-gray-500 dark:text-gray-400">有机化肥 需 / 存</span>
-            <span class="font-medium" :class="ripenPreview.cost.organic > ripenPreview.inventory.organic ? 'text-red-600 dark:text-red-400' : ''">
-              {{ ripenPreview.cost.organic }} / {{ ripenPreview.inventory.organic }}
+            <span class="text-gray-500 dark:text-gray-400">现有库存</span>
+            <span class="font-medium" :class="ripenPreview.sufficient ? '' : 'text-red-600 dark:text-red-400'">
+              普通 {{ ripenPreview.inventory.normal }} 件 · 有机 {{ ripenPreview.inventory.organic }} 件
             </span>
           </div>
         </div>
+        <p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
+          消耗按阶段秒数折算，库存按件计；是否充足沿用旧版判断规则。
+        </p>
 
         <div v-if="ripenPreview.skipped?.length" class="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
           <div class="font-medium">

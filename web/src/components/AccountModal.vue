@@ -357,6 +357,11 @@ function close() {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     errorMessage.value = ''
+    // 上次抓包的状态/错误不应带到下次打开。
+    capturePhase.value = 'idle'
+    captureMessage.value = ''
+    captureError.value = ''
+    stopCapturePolling()
     void loadQqCapability()
     if (props.editData) {
       activeTab.value = 'manual'

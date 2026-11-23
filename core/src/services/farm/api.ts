@@ -278,6 +278,9 @@ module.exports = {
     setOperationLimitsCallback,
     sendPlantRequest,
     getAllLands,
+    // 化肥道具 ID：催熟全部与库存解析需要按 ID 区分普通/有机，必须对外导出。
+    NORMAL_FERTILIZER_ID,
+    ORGANIC_FERTILIZER_ID,
     harvest,
     waterLand,
     farming,
