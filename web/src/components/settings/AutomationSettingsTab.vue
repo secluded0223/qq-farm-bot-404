@@ -18,7 +18,6 @@ interface AutomationSettings {
     friend_steal: boolean
     friend_help: boolean
     friend_bad: boolean
-    friend_golden_bug: boolean
     friend_help_exp_limit: boolean
     star_passport_claim: boolean
     star_solar_claim: boolean
@@ -68,8 +67,6 @@ interface AutomationSettings {
   fertilizerBuyNormalCount: number
   fertilizerBuyNormalThresholdHours: number
   fertilizerBuyCheckIntervalMinutes: number
-  goldenBugKeepCount: number
-  goldenBugRoundLimit: number
 }
 
 const props = withDefaults(defineProps<{
@@ -443,25 +440,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
         <BaseSwitch v-model="settings.automation.friend_help" label="自动帮忙" />
         <BaseSwitch v-model="settings.automation.friend_bad" label="自动捣乱" />
         <BaseSwitch v-model="settings.automation.friend_auto_accept" label="自动通过好友申请" />
-        <BaseSwitch v-model="settings.automation.friend_golden_bug" label="自动放黄金虫" />
         <BaseSwitch v-model="settings.automation.friend_help_exp_limit" label="经验满只帮护主犬" />
-      </div>
-
-      <div v-if="settings.automation.friend && settings.automation.friend_golden_bug" class="grid grid-cols-1 gap-3 rounded bg-amber-50 p-3 text-sm md:grid-cols-2 dark:bg-amber-900/20">
-        <BaseInput
-          v-model.number="settings.goldenBugKeepCount"
-          label="黄金虫保留数量"
-          type="number"
-          min="0"
-          max="9999"
-        />
-        <BaseInput
-          v-model.number="settings.goldenBugRoundLimit"
-          label="黄金虫单轮上限"
-          type="number"
-          min="1"
-          max="100"
-        />
       </div>
 
       <div v-if="settings.automation.friend && settings.automation.friend_auto_accept" class="rounded bg-sky-50 p-3 text-sm dark:bg-sky-900/20">

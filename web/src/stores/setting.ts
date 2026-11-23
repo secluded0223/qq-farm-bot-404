@@ -87,7 +87,6 @@ export interface AutomationConfig {
   friend_steal?: boolean
   friend_help?: boolean
   friend_bad?: boolean
-  friend_golden_bug?: boolean
   friend_help_exp_limit?: boolean
   skip_own_weed_bug?: boolean
 }
@@ -153,8 +152,6 @@ export interface SettingsState {
   fertilizerBuyNormalCount: number
   fertilizerBuyNormalThresholdHours: number
   fertilizerBuyCheckIntervalMinutes: number
-  goldenBugKeepCount: number
-  goldenBugRoundLimit: number
 }
 
 function createDefaultOfflineReminder(): OfflineConfig {
@@ -202,8 +199,6 @@ export const useSettingStore = defineStore('setting', () => {
     fertilizerBuyNormalCount: 10,
     fertilizerBuyNormalThresholdHours: 10,
     fertilizerBuyCheckIntervalMinutes: 30,
-    goldenBugKeepCount: 0,
-    goldenBugRoundLimit: 24,
   })
   const loading = ref(false)
   let fetchRequestId = 0
@@ -233,8 +228,6 @@ export const useSettingStore = defineStore('setting', () => {
       fertilizerBuyNormalCount: 10,
       fertilizerBuyNormalThresholdHours: 10,
       fertilizerBuyCheckIntervalMinutes: 30,
-      goldenBugKeepCount: 0,
-      goldenBugRoundLimit: 24,
     }
     loading.value = false
   }
@@ -267,8 +260,6 @@ export const useSettingStore = defineStore('setting', () => {
         settings.value.fertilizerBuyNormalCount = d.fertilizerBuyNormalCount ?? 10
         settings.value.fertilizerBuyNormalThresholdHours = d.fertilizerBuyNormalThresholdHours ?? 10
         settings.value.fertilizerBuyCheckIntervalMinutes = d.fertilizerBuyCheckIntervalMinutes ?? 30
-        settings.value.goldenBugKeepCount = d.goldenBugKeepCount ?? 0
-        settings.value.goldenBugRoundLimit = d.goldenBugRoundLimit ?? 24
         settings.value.bagSeedPriority = d.bagSeedPriority ?? []
         settings.value.bagSeedKnownIds = d.bagSeedKnownIds ?? []
         settings.value.bagSeedFallbackStrategy = d.bagSeedFallbackStrategy ?? 'level'
@@ -300,8 +291,6 @@ export const useSettingStore = defineStore('setting', () => {
         fertilizerBuyNormalCount: newSettings.fertilizerBuyNormalCount ?? 10,
         fertilizerBuyNormalThresholdHours: newSettings.fertilizerBuyNormalThresholdHours ?? 10,
         fertilizerBuyCheckIntervalMinutes: newSettings.fertilizerBuyCheckIntervalMinutes ?? 30,
-        goldenBugKeepCount: newSettings.goldenBugKeepCount ?? 0,
-        goldenBugRoundLimit: newSettings.goldenBugRoundLimit ?? 24,
       }
 
       await api.post('/api/settings/save', settingsPayload, {

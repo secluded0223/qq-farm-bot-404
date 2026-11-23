@@ -592,7 +592,6 @@ watch(() => props.currentAccountId, loadQixiFriends)
                 <div class="grid gap-3 sm:grid-cols-2">
                   <BaseSwitch v-model="automation.automation.friend_help" label="帮助好友" />
                   <BaseSwitch v-model="automation.automation.friend_bad" label="好友捣乱" />
-                  <BaseSwitch v-model="automation.automation.friend_golden_bug" label="放黄金虫" />
                   <BaseSwitch v-model="automation.automation.friend_help_exp_limit" label="经验满只帮护主犬" />
                 </div>
               </section>
@@ -604,16 +603,6 @@ watch(() => props.currentAccountId, loadQixiFriends)
                 <div class="grid gap-3 sm:grid-cols-2">
                   <BaseSwitch v-model="automation.automation.friend_auto_accept" label="自动通过好友申请" />
                   <BaseInput v-if="automation.automation.friend_auto_accept" v-model.number="automation.autoAcceptFriendMinLevel" label="自动通过好友最低等级" type="number" min="0" max="200" />
-                </div>
-              </section>
-
-              <section v-if="automation.automation.friend_golden_bug" class="border border-gray-100 rounded-lg p-4 space-y-3 dark:border-gray-700">
-                <div class="text-sm text-gray-700 font-medium dark:text-gray-300">
-                  黄金虫策略
-                </div>
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <BaseInput v-model.number="automation.goldenBugKeepCount" label="黄金虫保留数量" type="number" min="0" />
-                  <BaseInput v-model.number="automation.goldenBugRoundLimit" label="黄金虫单轮上限" type="number" min="1" />
                 </div>
               </section>
 

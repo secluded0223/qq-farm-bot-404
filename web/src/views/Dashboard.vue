@@ -276,8 +276,6 @@ const OP_META: Record<string, { label: string, icon: string, color: string }> = 
   plant: { label: '种植', icon: 'i-carbon-tree', color: 'text-lime-500' },
   steal: { label: '偷菜', icon: 'i-carbon-run', color: 'text-orange-500' },
   helpWater: { label: '帮浇水', icon: 'i-carbon-rain-drop', color: 'text-blue-300' },
-  goldenBugClear: { label: '清黄金虫', icon: 'i-carbon-clean', color: 'text-amber-500' },
-  goldenBugPut: { label: '放黄金虫', icon: 'i-carbon-pest', color: 'text-yellow-500' },
   helpWeed: { label: '帮除草', icon: 'i-carbon-cut', color: 'text-yellow-400' },
   helpBug: { label: '帮除虫', icon: 'i-carbon-pest', color: 'text-red-300' },
   taskClaim: { label: '任务', icon: 'i-carbon-task-complete', color: 'text-indigo-500' },
