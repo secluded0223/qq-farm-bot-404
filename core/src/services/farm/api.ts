@@ -105,11 +105,13 @@ async function fertilizeOne(landId: number, fertilizerId: number = NORMAL_FERTIL
 }
 
 // 官方一键施肥：一条请求提交多个地块，每个地块只施一次。
-async function fertilizeBatch(landIds: number[], fertilizerId: number): Promise<any> {
+// options.validateBeforeSend 供「催熟全部」在真正发包前再做一次状态校验。
+async function fertilizeBatch(landIds: number[], fertilizerId: number, options: { validateBeforeSend?: () => void } = {}): Promise<any> {
     const body = types.FertilizeRequest.encode(types.FertilizeRequest.create({
         land_ids: landIds.map((landId: number) => toLong(landId)),
         fertilizer_id: toLong(fertilizerId),
     })).finish();
+    if (typeof options.validateBeforeSend === 'function') options.validateBeforeSend();
     const { body: replyBody } = await sendMsgAsync('gamepb.plantpb.PlantService', 'Fertilize', body);
     const reply = types.FertilizeReply.decode(replyBody);
     if (reply.operation_limits && onOperationLimitsUpdate) {

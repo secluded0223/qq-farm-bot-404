@@ -931,6 +931,12 @@ async function handleApiCall(msg: any): Promise<void> {
                 case 'getLands':
                     result = await getLandsDetail(args[0] === true);
                     break;
+                case 'previewRipenAll':
+                    result = await require('../services/farm/ripen-all').previewRipenAll();
+                    break;
+                case 'ripenAllStep':
+                    result = await require('../services/farm/ripen-all').ripenAllStep(args[0], Number(args[1]) || 0);
+                    break;
                 case 'getIllustratedSnapshot':
                     result = await require('../services/illustrated').getIllustratedSnapshot();
                     break;

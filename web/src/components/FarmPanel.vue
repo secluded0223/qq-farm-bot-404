@@ -2,6 +2,7 @@
 import { useIntervalFn } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import api from '@/api'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import FarmScene from '@/components/FarmScene.vue'
 import InteractionItemsPanel from '@/components/InteractionItemsPanel.vue'
@@ -138,6 +139,83 @@ const operations = [
   { type: 'all', label: '一键全收', icon: 'i-carbon-flash', color: 'farm-btn-accent' },
 ]
 
+// ===== 催熟全部：先预览化肥消耗，确认后逐批执行 =====
+const ripenPreview = ref<any>(null)
+const ripenLoading = ref(false)
+const ripenRunning = ref(false)
+const ripenError = ref('')
+const ripenProgress = ref({ completed: 0, total: 0 })
+
+function closeRipen() {
+  if (ripenRunning.value)
+    return
+  ripenPreview.value = null
+  ripenError.value = ''
+  ripenProgress.value = { completed: 0, total: 0 }
+}
+
+async function openRipenAllPreview() {
+  if (ripenLoading.value || ripenRunning.value)
+    return
+  ripenLoading.value = true
+  ripenError.value = ''
+  try {
+    const { data } = await api.post('/api/farm/ripen-all/preview', undefined, { timeout: 60000 } as any)
+    if (!data?.ok)
+      throw new Error(data?.error || '预览失败')
+    ripenPreview.value = data.data
+    ripenProgress.value = { completed: 0, total: Number(data.data?.targetCount) || 0 }
+  }
+  catch (error: any) {
+    toast.error(error.response?.data?.error || error.message || '预览催熟计划失败')
+  }
+  finally {
+    ripenLoading.value = false
+  }
+}
+
+async function runRipenAll() {
+  if (!ripenPreview.value || ripenRunning.value)
+    return
+  ripenRunning.value = true
+  ripenError.value = ''
+  try {
+    let cursor = 0
+    const token = ripenPreview.value.token
+    let isDone = false
+    for (let guard = 0; guard < 200; guard++) {
+      const { data } = await api.post('/api/farm/ripen-all/step', { token, cursor }, { timeout: 90000 } as any)
+      if (!data?.ok)
+        throw new Error(data?.error || '催熟执行失败')
+      const step = data.data || {}
+      ripenProgress.value = {
+        completed: Number(step.completed) || 0,
+        total: Number(step.total) || ripenProgress.value.total,
+      }
+      await refresh()
+      cursor = Number(step.cursor) || cursor + 1
+      if (step.done) {
+        isDone = true
+        break
+      }
+      if (step.stopped) {
+        ripenError.value = String(step.stopped)
+        break
+      }
+    }
+    if (isDone) {
+      toast.success(`催熟完成：${ripenProgress.value.completed} 块土地已成熟`)
+      closeRipen()
+    }
+  }
+  catch (error: any) {
+    ripenError.value = error.response?.data?.error || error.message || '催熟执行失败'
+  }
+  finally {
+    ripenRunning.value = false
+  }
+}
+
 async function refresh() {
   if (currentAccountId.value) {
     const acc = currentAccount.value
@@ -259,6 +337,16 @@ onUnmounted(() => {
             <span class="hidden sm:inline">一键施肥</span>
             <span class="sm:hidden">施肥</span>
           </button>
+          <button
+            class="farm-btn-soft flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="operating || ripenLoading || ripenRunning"
+            title="催熟全部作物，先预览化肥消耗"
+            @click="openRipenAllPreview"
+          >
+            <div class="i-carbon-growth" />
+            <span class="hidden sm:inline">{{ ripenLoading ? '预览中…' : '催熟全部' }}</span>
+            <span class="sm:hidden">催熟</span>
+          </button>
         </div>
       </div>
 
@@ -367,5 +455,97 @@ onUnmounted(() => {
       @close="confirmVisible = false"
       @cancel="confirmVisible = false"
     />
+
+    <!-- 催熟全部：消耗预览与执行进度 -->
+    <div
+      v-if="ripenPreview"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      @click.self="closeRipen"
+    >
+      <div class="w-full max-w-md rounded-lg bg-white p-4 shadow-xl dark:bg-gray-800">
+        <h4 class="text-base text-gray-900 font-bold dark:text-gray-100">
+          催熟全部 · 消耗预览
+        </h4>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          确认后按批次施肥，每一批发送前都会重新校验作物状态与化肥库存。
+        </p>
+
+        <div class="mt-3 space-y-1.5 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-500 dark:text-gray-400">可催熟地块</span>
+            <span class="font-medium">{{ ripenPreview.targetCount }} 块</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500 dark:text-gray-400">批次 / 施肥次数</span>
+            <span class="font-medium">{{ ripenPreview.actionCount }} 批 · {{ ripenPreview.applicationCount }} 次</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500 dark:text-gray-400">普通化肥 需 / 存</span>
+            <span class="font-medium" :class="ripenPreview.cost.normal > ripenPreview.inventory.normal ? 'text-red-600 dark:text-red-400' : ''">
+              {{ ripenPreview.cost.normal }} / {{ ripenPreview.inventory.normal }}
+            </span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500 dark:text-gray-400">有机化肥 需 / 存</span>
+            <span class="font-medium" :class="ripenPreview.cost.organic > ripenPreview.inventory.organic ? 'text-red-600 dark:text-red-400' : ''">
+              {{ ripenPreview.cost.organic }} / {{ ripenPreview.inventory.organic }}
+            </span>
+          </div>
+        </div>
+
+        <div v-if="ripenPreview.skipped?.length" class="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+          <div class="font-medium">
+            跳过 {{ ripenPreview.skipped.length }} 块土地
+          </div>
+          <ul class="mt-1 list-inside list-disc space-y-0.5">
+            <li v-for="item in ripenPreview.skipped.slice(0, 5)" :key="item.landId">
+              土地 #{{ item.landId }}：{{ item.reason }}
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="!ripenPreview.sufficient" class="mt-3 rounded-lg bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">
+          化肥不足，请先补充后再催熟。
+        </div>
+
+        <div v-if="ripenRunning || ripenProgress.completed > 0" class="mt-3">
+          <div class="mb-1 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+            <span>进度</span>
+            <span>{{ ripenProgress.completed }} / {{ ripenProgress.total }}</span>
+          </div>
+          <div class="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+            <div
+              class="h-full rounded-full transition-all"
+              :style="{
+                width: `${ripenProgress.total ? Math.min(100, (ripenProgress.completed / ripenProgress.total) * 100) : 0}%`,
+                background: 'var(--theme-primary)',
+              }"
+            />
+          </div>
+        </div>
+
+        <p v-if="ripenError" class="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+          {{ ripenError }}
+        </p>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            class="farm-btn-soft rounded-lg px-3 py-2 text-sm transition"
+            :disabled="ripenRunning"
+            @click="closeRipen"
+          >
+            {{ ripenError ? '关闭' : '取消' }}
+          </button>
+          <button
+            v-if="!ripenError && ripenPreview.sufficient && ripenPreview.targetCount"
+            class="farm-btn-primary rounded-lg px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="ripenRunning"
+            @click="runRipenAll"
+          >
+            {{ ripenRunning ? '催熟中…' : '开始催熟' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

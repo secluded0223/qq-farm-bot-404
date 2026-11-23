@@ -320,6 +320,12 @@ function createDataProvider(options: DataProviderOptions) {
             callWorkerApi(resolveAccountRefId(accountRef), 'fertilizeAllOwnLands', fertilizerType, landIds)
         ),
 
+        // 催熟全部：先预览确认化肥消耗，再按 plan 分批执行。
+        previewRipenAll: (accountRef: string) => callWorkerApi(resolveAccountRefId(accountRef), 'previewRipenAll'),
+        ripenAllStep: (accountRef: string, token: unknown, cursor: unknown) => (
+            callWorkerApi(resolveAccountRefId(accountRef), 'ripenAllStep', token, Number(cursor) || 0)
+        ),
+
         doAnalytics: (accountRef: string, sortBy: string) => callWorkerApi(resolveAccountRefId(accountRef), 'getAnalytics', sortBy),
         buyFertilizer: (accountRef: string, type: string, count: number) => callWorkerApi(resolveAccountRefId(accountRef), 'buyFertilizer', type, count, true),
         checkAndBuyFertilizer: (accountRef: string, options: any) => callWorkerApi(resolveAccountRefId(accountRef), 'checkAndBuyFertilizer', options, true),
