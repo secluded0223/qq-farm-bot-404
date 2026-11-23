@@ -494,7 +494,6 @@ watch(() => props.currentAccountId, loadQixiFriends)
                 <div class="grid gap-3 sm:grid-cols-2">
                   <BaseSwitch v-model="strategy.prioritize2x2Crops" label="优先种植 2×2 作物" />
                   <BaseSwitch v-model="automation.automation.sell" label="卖果实" />
-                  <BaseSwitch v-model="automation.automation.golden_bug_clear" label="祛除黄金虫" />
                   <BaseSwitch v-model="automation.automation.farm_push" label="推送触发巡田" />
                   <BaseSwitch v-model="automation.automation.skip_own_weed_bug" label="保留自己农场的草虫" />
                 </div>

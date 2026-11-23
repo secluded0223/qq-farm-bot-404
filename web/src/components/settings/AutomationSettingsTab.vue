@@ -48,7 +48,6 @@ interface AutomationSettings {
     pet_diary_compensation_claim: boolean
     pet_diary_charm_equip: boolean
     pet_diary_battle: boolean
-    golden_bug_clear: boolean
     fertilizer_gift: boolean
     fertilizer_buy_organic: boolean
     fertilizer_buy_normal: boolean
@@ -217,7 +216,6 @@ watch(() => props.currentAccountId, loadQixiFriends)
           </button>
         </div>
         <BaseSwitch v-model="settings.automation.skip_own_weed_bug" label="不除自己草虫" />
-        <BaseSwitch v-model="settings.automation.golden_bug_clear" label="自动清除黄金虫" />
       </div>
 
       <Transition name="fade">
