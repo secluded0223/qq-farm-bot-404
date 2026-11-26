@@ -81,6 +81,7 @@ export const RANCH_ACTIONS = [
   'release',
   'putMosquito',
   'cleanFriend',
+  'produceFriend',
 ] as const
 
 export type RanchAction = (typeof RANCH_ACTIONS)[number] | 'acknowledge'
@@ -123,6 +124,8 @@ export const RANCH_ACTION_FIELDS: Record<RanchAction, string[]> = {
   release: ['ranchId', 'animalId'],
   putMosquito: ['hostGid', 'ranchId'],
   cleanFriend: ['hostGid'],
+  /** 好友一键帮忙生产：只指定主人，由服务端选就绪动物。 */
+  produceFriend: ['hostGid'],
   acknowledge: ['id'],
 }
 
@@ -154,6 +157,7 @@ export const RANCH_ACTION_REQUIRED: Record<RanchAction, string[][]> = {
   release: [['ranchId', 'animalId']],
   putMosquito: [['hostGid', 'ranchId']],
   cleanFriend: [['hostGid']],
+  produceFriend: [['hostGid']],
   acknowledge: [['id']],
 }
 
@@ -925,7 +929,7 @@ export interface RanchState {
   book: ReturnType<typeof mapBook>
   activities: { id: string, name: string, startTime: number, endTime: number, status: ReturnType<typeof activityStatus> }[] | null
   /** 好友列表项：巡查判据（可偷/可帮）由后端整条下发，前端只负责展示。 */
-  friends: { gid: string, name: string, avatarUrl: string, blacklisted: boolean, canSteal: boolean, canHelp: boolean, stealLotCount: number, helpCount: number }[] | null
+  friends: { gid: string, name: string, avatarUrl: string, blacklisted: boolean, canSteal: boolean, canHelp: boolean, canMidwife: boolean, stealLotCount: number, midwifeCount: number, helpCount: number }[] | null
   friendRanch: ReturnType<typeof mapFriendRanch>
   dailyShare: ReturnType<typeof mapDailyShare>
   dailyBenefit: ReturnType<typeof mapDailyBenefit>
@@ -1016,10 +1020,12 @@ export function mapRanchState(state?: Record<string, any> | null): RanchState | 
           name: text(friend.name) || text(friend.gid),
           avatarUrl: text(friend.avatarUrl),
           blacklisted: friend.blacklisted === true,
-          // 巡查判据：后端在好友名单里整条下发，界面据此标「可偷取 / 可清理」。
+          // 巡查判据：后端在好友名单里整条下发，界面据此标「可偷 / 可帮生产 / 可清理」。
           canSteal: friend.canSteal === true,
           canHelp: friend.canHelp === true,
+          canMidwife: friend.canMidwife === true,
           stealLotCount: number(friend.stealLotCount, 0) || 0,
+          midwifeCount: number(friend.midwifeCount, 0) || 0,
           helpCount: number(friend.helpCount, 0) || 0,
         })),
     friendRanch: state.friendRanch === undefined ? null : mapFriendRanch(state.friendRanch, serverTime),
@@ -1092,10 +1098,10 @@ export function buildRanchExecuteBody(action: RanchAction, input: Record<string,
 }
 
 /**
- * 直投协议：喂养 / 催产 / 收获 / 清理不改动资源交易，服务端允许免报价直接执行。
+ * 直投协议：喂养 / 催产 / 收获 / 清理 / 帮好友生产不改动资源交易，服务端允许免报价直接执行。
  * 只在这四个动作上开放，其余动作仍必须走 quote → execute，避免绕开报价的成本确认。
  */
-export const RANCH_DIRECT_ACTIONS: RanchAction[] = ['feed', 'produce', 'harvest', 'clean']
+export const RANCH_DIRECT_ACTIONS: RanchAction[] = ['feed', 'produce', 'harvest', 'clean', 'produceFriend']
 
 export function isRanchDirectAction(action: RanchAction) {
   return RANCH_DIRECT_ACTIONS.includes(action)
@@ -1132,7 +1138,7 @@ export interface RanchRequest {
   danger?: boolean
 }
 
-/** 免报价的直投请求：只有喂养 / 催产 / 收获 / 清理走这条路。 */
+/** 免报价的直投请求：喂养 / 催产 / 收获 / 清理 / 帮好友生产走这条路。 */
 export interface RanchDirectRequest {
   action: RanchAction
   input: Record<string, any>
@@ -1195,6 +1201,7 @@ export const RANCH_AUTOMATION_SWITCHES: ReadonlyArray<{ key: string, label: stri
   { key: 'ranch_activate_shed', label: '自动解锁一级棚', desc: '牧场 21 级后服务端下发的一级棚需要单独解锁，解锁免费但会改动账号状态', group: 'own' },
   { key: 'ranch_stroke', label: '自动抚摸动物', desc: '在好友牧场抚摸可触发巨大变异的动物，受每日抚摸次数限制', group: 'friend' },
   { key: 'ranch_friend_steal', label: '自动偷取好友产物', desc: '逐位好友进入牧场偷取', group: 'friend' },
+  { key: 'ranch_friend_produce', label: '自动帮忙生产', desc: '进入好友牧场让已成熟动物开始生产，不消耗互动次数', group: 'friend' },
   { key: 'ranch_friend_clean', label: '自动清理好友栏舍', desc: '清理好友栏舍危险物', group: 'friend' },
   { key: 'ranch_friend_mosquito', label: '自动放蚊子', desc: '向好友栏舍投放蚊子', group: 'friend' },
   { key: 'ranch_task', label: '自动领取牧场任务', desc: '领取已完成的牧场任务奖励', group: 'reward' },
@@ -1231,6 +1238,7 @@ export const RANCH_AUTOMATION_DEFAULTS = {
   ranch_activate_shed: false,
   ranch_stroke: false,
   ranch_friend_steal: false,
+  ranch_friend_produce: false,
   ranch_friend_clean: false,
   ranch_friend_mosquito: false,
   ranch_task: true,

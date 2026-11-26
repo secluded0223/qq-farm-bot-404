@@ -21,6 +21,7 @@ const defaultAutomation = {
   friend: false,
   friend_auto_accept: true,
   farm_push: false,
+  farm_illustrated: true,
   land_upgrade: false,
   friend_steal: false,
   friend_help: false,
@@ -85,6 +86,17 @@ const defaultAutomation = {
   fertilizer_multi_season: false,
   fertilizer_land_types: [...defaultFertilizerLandTypes],
   fertilizer_smart_seconds: 300,
+  // 以薯换福：会改状态的动作默认关闭，由用户在有效期内主动开启。
+  yishu_claim_seed: false,
+  yishu_share: false,
+  yishu_auto_sell: false,
+  yishu_claim_commission: false,
+  yishu_sell_fallback_own: false,
+  yishu_scan_friend_limit: 20,
+  yishu_scan_interval_minutes: 30,
+  yishu_sell_min_count: 1,
+  // 空串 = 不限时段；到点后每轮自动任务都按原逻辑卖。
+  yishu_sell_after_time: '',
   ...RANCH_AUTOMATION_DEFAULTS,
 }
 

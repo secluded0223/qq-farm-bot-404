@@ -387,9 +387,9 @@ test('两阶段协议：execute 必须回传报价签名，skipped 报价不发�
   assert.equal(buildRanchExecuteBody('sell', { uid: '9527' }, { expected: { signature: 'sig-1' } }).ok, false)
 })
 
-test('直投协议：只有喂养 / 催产 / 收获 / 清理免报价，其余动作仍强制走报价', () => {
-  // 四个免报价动作：带上 direct 标记，且不带 expected。
-  for (const action of ['feed', 'produce', 'harvest', 'clean']) {
+test('直投协议：喂养 / 催产 / 收获 / 清理 / 帮好友生产免报价，其余动作仍强制走报价', () => {
+  // 免报价动作：带上 direct 标记，且不带 expected。
+  for (const action of ['feed', 'produce', 'harvest', 'clean', 'produceFriend']) {
     assert.equal(isRanchDirectAction(action), true, `${action} 应走直投`)
   }
   assert.deepEqual(buildRanchDirectBody('harvest', { all: true }), { ok: true, body: { all: true, direct: true } })
@@ -398,6 +398,11 @@ test('直投协议：只有喂养 / 催产 / 收获 / 清理免报价，其余�
 
   // 直投同样受白名单与必填约束，未知字段不会漏发。
   assert.equal(buildRanchDirectBody('produce', { ranchId: '1:101', animalId: 5001 }).ok, true)
+  // 帮好友生产只带 hostGid，不能夹带自家动作才有的 ranchId/animalId。
+  assert.deepEqual(buildRanchDirectBody('produceFriend', { hostGid: '88001', animalId: 5001 }), {
+    ok: true, body: { hostGid: '88001', direct: true },
+  })
+  assert.equal(buildRanchDirectBody('produceFriend', {}).ok, false, '缺 hostGid 不能直发')
   assert.equal(buildRanchDirectBody('feed', { animalId: 5001 }).ok, false)
 
   // 交易类动作不能借 direct 绕开成本确认。
@@ -454,6 +459,18 @@ test('任务进度不伪造分母', () => {
   assert.deepEqual(taskRatio({ progress: '3', total: '0' }), { percent: 0, known: false, progress: '3', total: '0' })
   assert.deepEqual(taskRatio({ progress: '3', total: '10' }), { percent: 30, known: true, progress: '3', total: '10' })
   assert.equal(taskRatio({ progress: '20', total: '10' }).percent, 100)
+})
+
+test('好友名单的可帮生产与次数只取后端显式字段，缺字段时按 false/0 处理', () => {
+  const state = mapRanchState(baseState({
+    friends: [
+      { gid: '88001', name: '小明', canSteal: true, canHelp: false, canMidwife: true, stealLotCount: 2, midwifeCount: 3, helpCount: 0 },
+      { gid: '88002', name: '小红' },
+    ],
+  }))
+  assert.deepEqual(state.friends.map(friend => [friend.canMidwife, friend.midwifeCount]), [[true, 3], [false, 0]])
+  assert.equal(state.friends[0].canSteal, true)
+  assert.equal(state.friends[1].helpCount, 0, '没下发的次数不能猜成可互动')
 })
 
 test('好友栏舍的动物没有自家动作位', () => {

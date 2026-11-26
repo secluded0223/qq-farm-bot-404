@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { RanchFriendRanch, RanchItem, RanchRequest, RanchState } from '@/utils/ranch'
+import type { RanchDirectRequest, RanchFriendRanch, RanchItem, RanchRequest, RanchState } from '@/utils/ranch'
 import { storeToRefs } from 'pinia'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
@@ -13,8 +13,8 @@ import { formatQuantity, friendGrassLimit, friendGrassRoom, itemListLine } from 
 /**
  * 好友牧场面板。
  *
- * 好友详情走 store 的 fetchFriendRanch 单独读取，不进全局快照：这样列表和已展开的
- * 多张卡片可以同时存在，操作完成后只刷新被操作的那一位，不会把整页翻一次。
+ * 好友详情走 store 的 fetchFriendRanch 单独读取，不进全局快照：列表和展开详情各存一份，
+ * 同一时间只展开一位好友，切换时自动收起上一位；操作完成后只刷新这一位，不会把整页翻一次。
  * 所有写操作仍然只 emit request，由外层 RanchSceneHost 统一走 quote → execute，
  * 价格、限额和资源校验都在后端，页面不自己估算。
  */
@@ -22,6 +22,7 @@ const props = defineProps<{ state: RanchState | null }>()
 
 const emit = defineEmits<{
   request: [payload: RanchRequest]
+  direct: [payload: RanchDirectRequest]
 }>()
 
 const { currentAccountId } = storeToRefs(useAccountStore())
@@ -36,7 +37,7 @@ const listReady = computed(() => Array.isArray(props.state?.friends))
 /** 已展开的好友详情，按 gid 缓存；只在这里存，避免覆盖全局快照。 */
 const details = ref<Record<string, RanchFriendRanch>>({})
 const detailErrors = ref<Record<string, string>>({})
-const expanded = reactive<Record<string, boolean>>({})
+const expandedGid = ref<string | null>(null)
 const loadingGid = ref('')
 /** 刚提交过操作的好友：等写请求结束后只刷新这一位。 */
 const pendingGid = ref('')
@@ -76,16 +77,13 @@ function detailOf(gid: string) {
   return details.value[gid] || null
 }
 
-const expandedTotal = computed(() => Object.keys(expanded).filter(gid => expanded[gid]).length)
-
 function collapse(gid: string) {
-  if (expanded[gid])
-    expanded[gid] = false
+  if (expandedGid.value === gid)
+    expandedGid.value = null
 }
 
 function collapseAll() {
-  for (const gid of Object.keys(expanded))
-    expanded[gid] = false
+  expandedGid.value = null
 }
 
 function grassRoomOf(detail: RanchFriendRanch | null) {
@@ -122,20 +120,28 @@ async function loadDetail(gid: string) {
   syncGrassInput(gid, result.ranch)
 }
 
-async function toggle(gid: string) {
+async function toggle(gid: string, event?: MouseEvent) {
   if (!gid)
     return
-  if (expanded[gid]) {
+  if (expandedGid.value === gid) {
     collapse(gid)
     return
   }
-  expanded[gid] = true
+  // 收起上一位后下方卡片整体上移：记录按钮位置，展开后把滚动条补回同一视点。
+  const trigger = event?.currentTarget as HTMLElement | undefined
+  const scrollEl = trigger?.closest('.custom-scrollbar') as HTMLElement | null
+  const triggerTop = trigger?.getBoundingClientRect().top
+  collapseAll()
+  expandedGid.value = gid
+  await nextTick()
+  if (scrollEl && trigger && triggerTop !== undefined)
+    scrollEl.scrollTop += trigger.getBoundingClientRect().top - triggerTop
   // 已有缓存时先展示旧数据，同时后台刷新一次，好友那边刚变化的产物也能跟上。
   await loadDetail(gid)
 }
 
 async function reloadDetail(gid: string) {
-  if (!expanded[gid])
+  if (expandedGid.value !== gid)
     return
   await loadDetail(gid)
 }
@@ -146,7 +152,7 @@ watch(() => ranchStore.acting, (acting, was) => {
     return
   const gid = pendingGid.value
   pendingGid.value = ''
-  if (gid && expanded[gid])
+  if (gid && expandedGid.value === gid)
     void loadDetail(gid)
 })
 
@@ -157,6 +163,15 @@ function requestSteal(gid: string, name: string) {
     input: { hostGid: gid },
     title: `偷取${name}的牧场产物`,
     note: '服务端按进入牧场那一刻的可偷货架执行，可能少于页面显示的数量；每位好友每天可偷次数由服务端控制。',
+  })
+}
+
+function requestProduce(gid: string, name: string) {
+  pendingGid.value = gid
+  emit('direct', {
+    action: 'produceFriend',
+    input: { hostGid: gid },
+    title: `帮${name}的牧场生产`,
   })
 }
 
@@ -309,9 +324,6 @@ watch(currentAccountId, () => {
           <span class="rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
             共 {{ friends.length }} 位好友
           </span>
-          <BaseButton v-if="expandedTotal > 1" variant="ghost" size="sm" @click="collapseAll">
-            全部收起
-          </BaseButton>
         </template>
         <span v-else class="rounded-lg bg-gray-50 px-3 py-1.5 text-xs text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
           黑名单 {{ blacklistGids.length }} 位
@@ -394,7 +406,7 @@ watch(currentAccountId, () => {
                     {{ friend.gid }}
                   </p>
                 </div>
-                <!-- 巡查判据由后端整条下发，这里只做展示，不自行推断可偷/可帮。 -->
+                <!-- 巡查判据由后端整条下发，这里只做展示，不自行推断可偷/可帮生产/可清理。 -->
                 <div class="mt-1 flex flex-wrap gap-1">
                   <span
                     v-if="blacklistedSet.has(Number(friend.gid))"
@@ -406,10 +418,13 @@ watch(currentAccountId, () => {
                     <span v-if="friend.stealLotCount" class="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                       可偷 {{ friend.stealLotCount }} 批
                     </span>
+                    <span v-if="friend.canMidwife" class="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                      可帮生产{{ friend.midwifeCount ? ` ${friend.midwifeCount} 次` : '' }}
+                    </span>
                     <span v-if="friend.helpCount" class="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                       可帮 {{ friend.helpCount }} 次
                     </span>
-                    <span v-if="!friend.stealLotCount && !friend.helpCount" class="rounded bg-gray-50 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
+                    <span v-if="!friend.stealLotCount && !friend.canMidwife && !friend.helpCount" class="rounded bg-gray-50 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
                       暂无互动
                     </span>
                   </template>
@@ -427,14 +442,14 @@ watch(currentAccountId, () => {
                 variant="ghost"
                 size="sm"
                 :disabled="blacklistedSet.has(Number(friend.gid))"
-                @click="toggle(friend.gid)"
+                @click="toggle(friend.gid, $event)"
               >
-                {{ expanded[friend.gid] ? '收起' : '查看牧场' }}
+                {{ expandedGid === friend.gid ? '收起' : '查看牧场' }}
               </BaseButton>
             </div>
 
             <!-- 展开区：详情走单独接口，未拿到前不猜任何状态 -->
-            <div v-if="expanded[friend.gid]" class="border-t border-gray-100 px-3 pb-3 pt-3 space-y-3 dark:border-gray-700">
+            <div v-if="expandedGid === friend.gid" class="border-t border-gray-100 px-3 pb-3 pt-3 space-y-3 dark:border-gray-700">
               <div v-if="loadingGid === friend.gid && !detailOf(friend.gid)" class="py-6 text-center text-xs text-gray-500">
                 正在进入{{ friend.name }}的牧场…
               </div>
@@ -512,6 +527,15 @@ watch(currentAccountId, () => {
                   <span v-else class="text-[11px] text-gray-400">
                     最多可送 {{ formatQuantity(String(grassLimitOf(detailOf(friend.gid)))) }} 份
                   </span>
+                  <BaseButton
+                    variant="primary"
+                    size="sm"
+                    :disabled="!friend.canMidwife"
+                    :title="friend.canMidwife ? '' : '对方当前没有可帮生产的动物'"
+                    @click="requestProduce(friend.gid, friend.name)"
+                  >
+                    帮忙生产
+                  </BaseButton>
                   <BaseButton
                     variant="secondary"
                     size="sm"
